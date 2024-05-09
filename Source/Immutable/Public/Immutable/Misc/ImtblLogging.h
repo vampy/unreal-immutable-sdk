@@ -3,7 +3,7 @@
 #include "CoreMinimal.h"
 #include "Misc/GeneratedTypeName.h"
 
-IMMUTABLE_API DECLARE_LOG_CATEGORY_EXTERN(LogImmutable, Log, All);
+IMMUTABLE_API DECLARE_LOG_CATEGORY_EXTERN(LogImmutable, All, All);
 
 // Disable for shipping builds
 #if NO_LOGGING

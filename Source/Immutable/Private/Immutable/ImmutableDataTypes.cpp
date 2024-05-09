@@ -17,9 +17,9 @@ FString FImmutablePassportInitData::ToJsonString() const
 	}
 	// Remove redirectUri field if it's empty so that the bridge doesn't try to
 	// use it
-	if (Wrapper.JsonObject->HasField("redirectUri") && Wrapper.JsonObject->GetStringField("redirectUri").IsEmpty())
+	if (Wrapper.JsonObject->HasField(TEXT("redirectUri")) && Wrapper.JsonObject->GetStringField(TEXT("redirectUri")).IsEmpty())
 	{
-		Wrapper.JsonObject->RemoveField("redirectUri");
+		Wrapper.JsonObject->RemoveField(TEXT("redirectUri"));
 	}
 	Wrapper.JsonObjectToString(OutString);
 
@@ -29,20 +29,20 @@ FString FImmutablePassportInitData::ToJsonString() const
 TOptional<FImmutablePassportInitDeviceFlowData> FImmutablePassportInitDeviceFlowData::FromJsonString(const FString& JsonObjectString)
 {
 	FImmutablePassportInitDeviceFlowData PassportConnect;
-	
+
 	if (!FJsonObjectConverter::JsonObjectStringToUStruct(JsonObjectString, &PassportConnect, 0, 0))
 	{
 		IMTBL_WARN("Could not parse response from JavaScript into the expected " "Passport connect format")
 		return TOptional<FImmutablePassportInitDeviceFlowData>();
 	}
-	
+
 	return PassportConnect;
 }
 
 FString FImmutablePassportZkEvmRequestAccountsData::ToJsonString() const
 {
 	FString OutString;
-	
+
 	FJsonObjectConverter::UStructToJsonObjectString(*this, OutString, 0, 0, 0, nullptr, false);
 
 	return OutString;
@@ -56,7 +56,7 @@ TOptional<FImmutablePassportZkEvmRequestAccountsData> FImmutablePassportZkEvmReq
 		IMTBL_WARN("Could not parse response from JavaScript into the expected " "Passport ZkEvm request accounts format")
 		return TOptional<FImmutablePassportZkEvmRequestAccountsData>();
 	}
-	
+
 	return RequestAccounts;
 }
 
@@ -71,7 +71,7 @@ TOptional<FImmutablePassportZkEvmRequestAccountsData> FImmutablePassportZkEvmReq
 		IMTBL_ERR("Could not parse response from JavaScript into the expected " "Passport ZkEvm request accounts format")
 		return TOptional<FImmutablePassportZkEvmRequestAccountsData>();
 	}
-	
+
 	return RequestAccounts;
 }
 

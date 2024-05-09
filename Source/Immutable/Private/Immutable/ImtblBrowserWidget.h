@@ -28,20 +28,22 @@ public:
 protected:
 	void ExecuteJS(const FString& ScriptText) const;
 
+	UGameInstance* GetGameInstance() const;
+	int32 GetWorldUserIndex() const;
+
 private:
 	DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnConsoleMessage, const FString &, Message, const FString &, Source, int32, Line);
 
 	FOnConsoleMessage OnConsoleMessage;
 
 #if USING_BUNDLED_CEF
-	TSharedPtr<class SWebBrowser> WebBrowserWidget;
+	TSharedPtr<class SWebBrowserView> WebBrowserWidget;
 #endif
 	/** URL that the browser will initially navigate to. The URL should include
 	 * the protocol, eg http:// */
 	FString InitialURL;
 	/** Should the browser window support transparency. */
 	bool bSupportsTransparency = true;
-	bool bShowInitialThrobber = false;
 
 	UPROPERTY()
 	class UImtblJSConnector* JSConnector = nullptr;

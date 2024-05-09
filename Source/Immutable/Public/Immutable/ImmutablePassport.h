@@ -54,6 +54,10 @@ public:
 
 	DECLARE_DELEGATE_OneParam(FImtblPassportResponseDelegate, FImmutablePassportResult);
 
+	// Custom delegate to launch an URL
+	DECLARE_DELEGATE_ThreeParams(FImtblPassportLaunchURLDelegate, const FString& /*URL*/, const FString& /*Params*/, FString& /*OutError*/);
+
+
 #if PLATFORM_ANDROID
 	void HandleDeepLink(FString DeepLink) const;
 	void HandleCustomTabsDismissed(FString Url);
@@ -149,13 +153,20 @@ public:
 	 */
 	void HasStoredCredentials(const FImtblPassportResponseDelegate& ResponseDelegate);
 
+	void SetCustomLaunchURLDelegate(const FImtblPassportLaunchURLDelegate& NewDelegate)
+	{
+		CustomLaunchURLDelegate = NewDelegate;
+	}
+
 protected:
 	void Setup(TWeakObjectPtr<class UImtblJSConnector> Connector);
 	void ReinstateConnection(FImtblJSResponse Response);
 
+	void LaunchURL(const FString& URL, const FString& Params, FString& OutError);
+
 #if PLATFORM_ANDROID
 	DECLARE_DELEGATE(FImtblPassportOnPKCEDismissedDelegate);
-  
+
 	FImtblPassportOnPKCEDismissedDelegate OnPKCEDismissed;
 #endif
 
@@ -229,7 +240,9 @@ private:
 	void SavePassportSettings();
 	void LoadPassportSettings();
 
-private:
+	UGameInstance* GetGameInstance() const;
+	int32 GetWorldUserIndex() const;
+
 	enum EImmutablePassportStateFlags : uint8
 	{
 		IPS_NONE = 0,
@@ -243,4 +256,6 @@ private:
 	};
 
 	uint8 StateFlags = IPS_NONE;
+
+	FImtblPassportLaunchURLDelegate CustomLaunchURLDelegate;
 };

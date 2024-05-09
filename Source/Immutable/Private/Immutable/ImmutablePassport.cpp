@@ -168,7 +168,7 @@ void UImmutablePassport::HasStoredCredentials(const FImtblPassportResponseDelega
 {
 	// we do check credentials into two steps, we check accessToken and then IdToken
 	// check access token
-	CallJS(ImmutablePassportAction::GetAccessToken, TEXT(""), ResponseDelegate, FImtblJSResponseDelegate::CreateLambda([=](FImtblJSResponse Response)
+	CallJS(ImmutablePassportAction::GetAccessToken, TEXT(""), ResponseDelegate, FImtblJSResponseDelegate::CreateLambda([this, ResponseDelegate](FImtblJSResponse Response)
 	{
 		FString AccessToken;
 
@@ -239,6 +239,18 @@ void UImmutablePassport::ReinstateConnection(FImtblJSResponse Response)
 				CallJS(ImmutablePassportAction::INIT_DEVICE_FLOW, TEXT(""), ResponseDelegate.GetValue(), FImtblJSResponseDelegate::CreateUObject(this, &UImmutablePassport::OnInitDeviceFlowResponse));
 			}
 		}
+	}
+}
+
+void UImmutablePassport::LaunchURL(const FString& URL, const FString& Params, FString& OutError)
+{
+	if (CustomLaunchURLDelegate.IsBound())
+	{
+		CustomLaunchURLDelegate.Execute(URL, Params, OutError);
+	}
+	else
+	{
+		FPlatformProcess::LaunchURL(*URL, *Params, &OutError);
 	}
 }
 
@@ -313,7 +325,7 @@ void UImmutablePassport::OnInitDeviceFlowResponse(FImtblJSResponse Response)
 		}
 		FString Err;
 
-		FPlatformProcess::LaunchURL(*InitDeviceFlowData->url, nullptr, &Err);
+		LaunchURL(InitDeviceFlowData->url, TEXT(""), Err);
 		if (Err.Len())
 		{
 			FString Msg = "Failed to connect to Browser: " + Err;
@@ -379,7 +391,7 @@ void UImmutablePassport::OnLogoutResponse(FImtblJSResponse Response)
 		else
 		{
 #endif
-			FPlatformProcess::LaunchURL(*Url, nullptr, &ErrorMessage);
+			LaunchURL(Url, TEXT(""), ErrorMessage);
 			if (ErrorMessage.Len())
 			{
 				Message = "Failed to connect to Browser: " + ErrorMessage;
@@ -798,21 +810,41 @@ bool UImmutablePassport::IsStateFlagsSet(uint8 StateIn) const
 
 void UImmutablePassport::SavePassportSettings()
 {
-	UImmutableSaveGame* SaveGameInstance = Cast<UImmutableSaveGame>(UGameplayStatics::CreateSaveGameObject(UImmutableSaveGame::StaticClass()));
+	IMTBL_LOG_FUNC("");
 
+	UImmutableSaveGame* SaveGameInstance = Cast<UImmutableSaveGame>(UGameplayStatics::CreateSaveGameObject(UImmutableSaveGame::StaticClass()));
 	SaveGameInstance->bWasConnectedViaPKCEFlow = IsStateFlagsSet(IPS_PKCE | IPS_CONNECTED);
 
-	UGameplayStatics::SaveGameToSlot(SaveGameInstance, PASSPORT_SAVE_GAME_SLOT_NAME, 0);
+	UGameplayStatics::SaveGameToSlot(SaveGameInstance, PASSPORT_SAVE_GAME_SLOT_NAME, GetWorldUserIndex());
 }
 
 void UImmutablePassport::LoadPassportSettings()
 {
-	UImmutableSaveGame* SaveGameInstance = Cast<UImmutableSaveGame>(UGameplayStatics::LoadGameFromSlot(PASSPORT_SAVE_GAME_SLOT_NAME, 0));
+	IMTBL_LOG_FUNC("");
 
+	UImmutableSaveGame* SaveGameInstance = Cast<UImmutableSaveGame>(UGameplayStatics::LoadGameFromSlot(PASSPORT_SAVE_GAME_SLOT_NAME, GetWorldUserIndex()));
 	if (SaveGameInstance)
 	{
 		SaveGameInstance->bWasConnectedViaPKCEFlow ? SetStateFlags(IPS_PKCE) : ResetStateFlags(IPS_PKCE);
 	}
+}
+
+UGameInstance* UImmutablePassport::GetGameInstance() const
+{
+	// Assume Passport always resides inside UImmutableSubsystem
+	return CastChecked<UGameInstanceSubsystem>(GetOuter())->GetGameInstance();
+}
+
+int32 UImmutablePassport::GetWorldUserIndex() const
+{
+	if (WITH_EDITOR)
+	{
+		const FWorldContext* WorldContext = GetGameInstance()->GetWorldContext();
+		const int32 InstanceID = WorldContext ? WorldContext->PIEInstance : INDEX_NONE;
+		return InstanceID == INDEX_NONE ? 0 : InstanceID;
+	}
+
+	return 0;
 }
 
 #if PLATFORM_ANDROID | PLATFORM_IOS | PLATFORM_MAC

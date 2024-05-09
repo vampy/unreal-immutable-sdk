@@ -1,4 +1,4 @@
-﻿// Fill out your copyright notice in the Description page of Project Settings.
+// Fill out your copyright notice in the Description page of Project Settings.
 
 #include "Immutable/ImmutableSubsystem.h"
 
@@ -53,16 +53,6 @@ void UImmutableSubsystem::Deinitialize()
 	FWorldDelegates::OnWorldTickStart.Remove(WorldTickHandle);
 
 	Super::Deinitialize();
-}
-
-template <class UserClass>
-#if (ENGINE_MAJOR_VERSION >= 5 && ENGINE_MINOR_VERSION >= 1)
-void UImmutableSubsystem::WhenReady(UserClass* Object, typename FImmutableSubsystemReadyDelegate::FDelegate::TMethodPtr<UserClass> Func)
-#else
-void UImmutableSubsystem::WhenReady(UserClass* Object, typename FImmutableSubsystemReadyDelegate::FDelegate::TUObjectMethodDelegate<UserClass>::FMethodPtr Func)
-#endif
-{
-	OnReady.AddUObject(Object, Func);
 }
 
 void UImmutableSubsystem::OnBridgeReady()

@@ -14,6 +14,6 @@ class IMMUTABLE_API UImtblSDKResource : public UObject
 	GENERATED_BODY()
 
 public:
-	UPROPERTY()
+	UPROPERTY(VisibleAnywhere)
 	FString Js;
 };

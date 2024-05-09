@@ -6,6 +6,7 @@
 #include "Immutable/ImtblJSConnector.h"
 #if USING_BUNDLED_CEF
 #include "SWebBrowser.h"
+#include "WebBrowserModule.h"
 #endif
 #include "Immutable/Assets/ImtblSDKResource.h"
 #include "Immutable/ImmutableSubsystem.h"
@@ -60,8 +61,9 @@ bool UImtblBrowserWidget::IsPageLoaded() const
 {
 #if USING_BUNDLED_CEF
 	return WebBrowserWidget.IsValid() && WebBrowserWidget->IsLoaded();
-#endif
+#else
 	return false;
+#endif
 }
 
 void UImtblBrowserWidget::ExecuteJS(const FString& ScriptText) const
@@ -72,6 +74,28 @@ void UImtblBrowserWidget::ExecuteJS(const FString& ScriptText) const
 		WebBrowserWidget->ExecuteJavascript(ScriptText);
 	}
 #endif
+}
+
+UGameInstance* UImtblBrowserWidget::GetGameInstance() const
+{
+	if (const UWorld* World = GEngine->GetWorldFromContextObject(this, EGetWorldErrorMode::LogAndReturnNull))
+	{
+		return World->GetGameInstance();
+	}
+
+	return nullptr;
+}
+
+int32 UImtblBrowserWidget::GetWorldUserIndex() const
+{
+	if (WITH_EDITOR)
+	{
+		const FWorldContext* WorldContext = GetGameInstance()->GetWorldContext();
+		const int32 InstanceID = WorldContext ? WorldContext->PIEInstance : INDEX_NONE;
+		return InstanceID == INDEX_NONE ? 0 : InstanceID;
+	}
+
+	return 0;
 }
 
 void UImtblBrowserWidget::SetBrowserContent()
@@ -131,14 +155,31 @@ TSharedRef<SWidget> UImtblBrowserWidget::RebuildWidget()
 	}
 	else
 	{
+		FBrowserContextSettings BrowserContextSettings{FGuid::NewGuid().ToString()};
+
+		// Set per PIE window web cache
+		if (WITH_EDITOR)
+		{
+			// BrowserContextSettings.bPersistSessionCookies = false;
+			const IWebBrowserSingleton* WebBrowserSingleton = IWebBrowserModule::Get().GetSingleton();
+
+			// TODO: We can't make a custom name because GenerateWebCacheFolderName is ran on the CookieStorageLocation
+			// The cache directory must always live under the Saved/webcache_<CHROME_VERSION_BUILD>
+			const FString DirectoryName = FString::Printf(TEXT("webcache_4430/immutable_%d"), GetWorldUserIndex());
+			const FString RelativeCachePath(FPaths::Combine(WebBrowserSingleton->ApplicationCacheDir(), DirectoryName));
+			BrowserContextSettings.CookieStorageLocation = FPaths::ConvertRelativePathToFull(RelativeCachePath);
+			IMTBL_LOG("CookieStorageLocation: %s", *BrowserContextSettings.CookieStorageLocation);
+		}
+
 #if USING_BUNDLED_CEF
-		WebBrowserWidget = SNew(SWebBrowser).InitialURL(InitialURL).ShowControls(false).SupportsTransparency(bSupportsTransparency).ShowInitialThrobber(bShowInitialThrobber)
+		WebBrowserWidget = SNew(SWebBrowserView).InitialURL(InitialURL).SupportsTransparency(bSupportsTransparency)
 #if PLATFORM_ANDROID | PLATFORM_IOS
             .OnLoadCompleted(
                 BIND_UOBJECT_DELEGATE(FSimpleDelegate, HandleOnLoadCompleted))
 #endif
 #if ENGINE_MAJOR_VERSION == 5 && ENGINE_MINOR_VERSION >= 1
 			.OnConsoleMessage(BIND_UOBJECT_DELEGATE(FOnConsoleMessageDelegate, HandleOnConsoleMessage))
+			.ContextSettings(BrowserContextSettings)
 #endif
 			;
 

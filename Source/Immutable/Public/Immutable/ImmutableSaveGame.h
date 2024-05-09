@@ -17,5 +17,5 @@ class IMMUTABLE_API UImmutableSaveGame : public USaveGame
 public:
 	/** check if player logged in/connected with PKCE flow previously */
 	UPROPERTY(VisibleAnywhere, Category = "Immutable")
-	bool bWasConnectedViaPKCEFlow;
+	bool bWasConnectedViaPKCEFlow = false;
 };

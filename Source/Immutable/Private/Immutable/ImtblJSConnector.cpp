@@ -56,7 +56,7 @@ void UImtblJSConnector::CallJS(const FImtblJSRequest& Request, FImtblJSResponseD
 {
 	if (!IsBridgeReady())
 	{
-		// IMTBL_WARN("Attempt to call Immutable JS bridge before bridge ready")
+		IMTBL_WARN("Attempt to call Immutable JS bridge before bridge ready")
 		AddCallbackWhenBridgeReady(FOnBridgeReadyDelegate::FDelegate::CreateLambda([Request, HandleResponse, ResponseTimeout, this]()
 		{
 			CallJS(Request, HandleResponse, ResponseTimeout);

@@ -9,7 +9,7 @@ public class Immutable : ModuleRules
 	public Immutable(ReadOnlyTargetRules Target) : base(Target)
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
-		bEnforceIWYU = true;
+		IWYUSupport = IWYUSupport.Full;
 		bUseUnity = true;
 
 #if UE_5_1_OR_LATER
