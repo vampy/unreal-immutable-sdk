@@ -3,6 +3,7 @@
 #include "Immutable/ImtblJSConnector.h"
 
 #include "Immutable/Misc/ImtblLogging.h"
+#include "ImtblBrowserWidget.h"
 #include "Immutable/ImtblJSMessages.h"
 
 UImtblJSConnector::UImtblJSConnector() { IMTBL_LOG_FUNCSIG }
