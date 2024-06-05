@@ -13,6 +13,7 @@
 
 #include "ImmutablePassport.generated.h"
 
+class UImmutableAnalytics;
 
 template <typename UStructType>
 FString UStructToJsonString(const UStructType& InStruct)
@@ -107,6 +108,16 @@ public:
 	 * FImtblPassportResponseDelegate to call on response from JS.
 	 */
 	void ZkEvmSendTransaction(const FImtblTransactionRequest& Request, const FImtblPassportResponseDelegate& ResponseDelegate);
+
+	/**
+	 * Retrieves the transaction information of a given transaction hash. This function uses the Ethereum JSON-RPC
+	 * <c>eth_getTransactionReceipt</c> method. Response will contain the receipt of the transaction or null if it is still processing.
+	 * @param Request The request data(Hash) to perform the transaction.
+	 * @param ResponseDelegate The response delegate of type
+	 * FImtblPassportResponseDelegate to call on response from JS.
+	 */
+	void ZkEvmGetTransactionReceipt(const FZkEvmTransactionReceiptRequest& Request, const FImtblPassportResponseDelegate& ResponseDelegate);
+
 	void GetIdToken(const FImtblPassportResponseDelegate& ResponseDelegate);
 	void GetAccessToken(const FImtblPassportResponseDelegate& ResponseDelegate);
 	void GetAddress(const FImtblPassportResponseDelegate& ResponseDelegate);
@@ -205,6 +216,7 @@ protected:
 	void OnZkEvmRequestAccountsResponse(FImtblJSResponse Response);
 	void OnZkEvmGetBalanceResponse(FImtblJSResponse Response);
 	void OnZkEvmSendTransactionResponse(FImtblJSResponse Response);
+	void OnZkEvmGetTransactionReceiptResponse(FImtblJSResponse Response);
 	void OnConfirmCodeResponse(FImtblJSResponse Response);
 #if PLATFORM_ANDROID | PLATFORM_IOS | PLATFORM_MAC
 	void OnGetPKCEAuthUrlResponse(FImtblJSResponse Response);
@@ -258,4 +270,7 @@ private:
 	uint8 StateFlags = IPS_NONE;
 
 	FImtblPassportLaunchURLDelegate CustomLaunchURLDelegate;
+
+	UPROPERTY()
+	UImmutableAnalytics* Analytics = nullptr;
 };

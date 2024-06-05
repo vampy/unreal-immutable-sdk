@@ -2,6 +2,7 @@
 
 #include "Immutable/ImmutablePassport.h"
 
+#include "ImmutableAnalytics.h"
 #include "Immutable/Misc/ImtblLogging.h"
 #include "Immutable/ImmutableResponses.h"
 #include "Immutable/ImtblJSConnector.h"
@@ -56,6 +57,7 @@ void UImmutablePassport::Connect(bool IsConnectImx, bool TryToRelogin, const FIm
 	}
 	else
 	{
+		Analytics->Track(IsConnectImx ? UImmutableAnalytics::EEventName::START_CONNECT_IMX : UImmutableAnalytics::EEventName::START_LOGIN);
 		CallJS(ImmutablePassportAction::INIT_DEVICE_FLOW, TEXT(""), ResponseDelegate, FImtblJSResponseDelegate::CreateUObject(this, &UImmutablePassport::OnInitDeviceFlowResponse));
 	}
 }
@@ -69,6 +71,7 @@ void UImmutablePassport::ConnectPKCE(bool IsConnectImx, const FImtblPassportResp
 		SetStateFlags(IPS_IMX);
 	}
 	PKCEResponseDelegate = ResponseDelegate;
+	Analytics->Track(IsConnectImx ? UImmutableAnalytics::EEventName::START_CONNECT_IMX_PKCE : UImmutableAnalytics::EEventName::START_LOGIN_PKCE);
 	CallJS(ImmutablePassportAction::GetPKCEAuthUrl, TEXT(""), PKCEResponseDelegate, FImtblJSResponseDelegate::CreateUObject(this, &UImmutablePassport::OnGetPKCEAuthUrlResponse));
 }
 #endif
@@ -113,6 +116,11 @@ void UImmutablePassport::ZkEvmGetBalance(const FImmutablePassportZkEvmGetBalance
 void UImmutablePassport::ZkEvmSendTransaction(const FImtblTransactionRequest& Request, const FImtblPassportResponseDelegate& ResponseDelegate)
 {
 	CallJS(ImmutablePassportAction::ZkEvmSendTransaction, UStructToJsonString(Request), ResponseDelegate, FImtblJSResponseDelegate::CreateUObject(this, &UImmutablePassport::OnZkEvmSendTransactionResponse));
+}
+
+void UImmutablePassport::ZkEvmGetTransactionReceipt(const FZkEvmTransactionReceiptRequest& Request, const FImtblPassportResponseDelegate& ResponseDelegate)
+{
+	CallJS(ImmutablePassportAction::ZkEvmGetTransactionReceipt, UStructToJsonString(Request), ResponseDelegate, FImtblJSResponseDelegate::CreateUObject(this, &UImmutablePassport::OnZkEvmGetTransactionReceiptResponse));
 }
 
 void UImmutablePassport::ConfirmCode(const FString& DeviceCode, const float Interval, const FImtblPassportResponseDelegate& ResponseDelegate)
@@ -204,11 +212,15 @@ void UImmutablePassport::Setup(const TWeakObjectPtr<UImtblJSConnector> Connector
 
 	if (!Connector.IsValid())
 	{
-		IMTBL_ERR("Invalid JSConnector passed to UImmutablePassport::Initialize.")
+		IMTBL_ERR("Invalid JSConnector passed to UImmutablePassport::Setup.")
 		return;
 	}
 
 	JSConnector = Connector.Get();
+
+	// Analytics
+	Analytics = NewObject<UImmutableAnalytics>(this);
+	Analytics->Setup(Connector);
 }
 
 void UImmutablePassport::ReinstateConnection(FImtblJSResponse Response)
@@ -218,15 +230,19 @@ void UImmutablePassport::ReinstateConnection(FImtblJSResponse Response)
 	if (auto ResponseDelegate = GetResponseDelegate(Response))
 	{
 		// currently, this response has to be called only for RELOGIN AND RECONNECT bridge routines
-		const FString CallbackName = (Response.responseFor.Compare(ImmutablePassportAction::RELOGIN, ESearchCase::IgnoreCase) == 0) ? "Relogin" : "Reconnect";
+		bool IsRelogin = Response.responseFor.Compare(ImmutablePassportAction::RELOGIN, ESearchCase::IgnoreCase) == 0;
+		const FString CallbackName = IsRelogin ? "Relogin" : "Reconnect";
+		UImmutableAnalytics::EEventName EventName = IsRelogin ? UImmutableAnalytics::EEventName::COMPLETE_RELOGIN : UImmutableAnalytics::EEventName::COMPLETE_RECONNECT;
 
 		if (Response.JsonObject->GetBoolField(TEXT("result")))
 		{
 			SetStateFlags(IPS_CONNECTED);
 			ResponseDelegate->ExecuteIfBound(FImmutablePassportResult{true, "", Response});
+			Analytics->Track(EventName, true);
 		}
 		else
 		{
+			Analytics->Track(EventName, false);
 #if PLATFORM_ANDROID | PLATFORM_IOS | PLATFORM_MAC
 			if (IsStateFlagsSet(IPS_PKCE))
 			{
@@ -302,7 +318,7 @@ void UImmutablePassport::OnInitializeResponse(FImtblJSResponse Response)
 			IMTBL_ERR("Passport initialization failed.")
 			Response.Error.IsSet() ? Msg = Response.Error->ToString() : Msg = Response.JsonObject->GetStringField(TEXT("error"));
 		}
-
+		Analytics->Track(UImmutableAnalytics::EEventName::INIT_PASSPORT, Response.success);
 		ResponseDelegate->ExecuteIfBound(FImmutablePassportResult{Response.success, Msg, Response});
 	}
 }
@@ -401,6 +417,7 @@ void UImmutablePassport::OnLogoutResponse(FImtblJSResponse Response)
 
 				return;
 			}
+			Analytics->Track(UImmutableAnalytics::EEventName::COMPLETE_LOGOUT);
 			Message = "Logged out";
 			IMTBL_LOG("%s", *Message)
 			ResponseDelegate->ExecuteIfBound(FImmutablePassportResult{ Response.success, Message });
@@ -504,6 +521,7 @@ void UImmutablePassport::OnConnectPKCEResponse(FImtblJSResponse Response)
 			ResetStateFlags(IPS_PKCE);
 			Response.Error.IsSet() ? Msg = Response.Error->ToString() : Msg = Response.JsonObject->GetStringField(TEXT("error"));
 		}
+		Analytics->Track(IsStateFlagsSet(IPS_IMX) ? UImmutableAnalytics::EEventName::COMPLETE_CONNECT_IMX_PKCE : UImmutableAnalytics::EEventName::COMPLETE_LOGIN_PKCE, Response.success);
 		PKCEResponseDelegate.ExecuteIfBound(FImmutablePassportResult{Response.success, Msg});
 		PKCEResponseDelegate = nullptr;
 
@@ -658,12 +676,30 @@ void UImmutablePassport::OnZkEvmSendTransactionResponse(FImtblJSResponse Respons
 	}
 }
 
+void UImmutablePassport::OnZkEvmGetTransactionReceiptResponse(FImtblJSResponse Response)
+{
+	if (auto ResponseDelegate = GetResponseDelegate(Response))
+	{
+		FString Msg;
+		bool bSuccess = true;
+		
+		if (!Response.success)
+		{
+			IMTBL_WARN("zkEVM transaction receipt retrieval failed.");
+			Response.Error.IsSet() ? Msg = Response.Error->ToString() : Msg = Response.JsonObject->GetStringField(TEXT("error"));
+			bSuccess = false;
+		}
+		ResponseDelegate->ExecuteIfBound(FImmutablePassportResult{bSuccess, Msg, Response});
+	}
+}
+
 void UImmutablePassport::OnConfirmCodeResponse(FImtblJSResponse Response)
 {
 	if (auto ResponseDelegate = GetResponseDelegate(Response))
 	{
 		FString Msg;
 		FString TypeOfConnection = IsStateFlagsSet(IPS_IMX) ? TEXT("connect") : TEXT("login");
+		UImmutableAnalytics::EEventName EventName = IsStateFlagsSet(IPS_IMX) ? UImmutableAnalytics::EEventName::COMPLETE_CONNECT_IMX : UImmutableAnalytics::EEventName::COMPLETE_LOGIN;
 
 		ResetStateFlags(IPS_CONNECTING);
 		if (Response.success)
@@ -676,6 +712,7 @@ void UImmutablePassport::OnConfirmCodeResponse(FImtblJSResponse Response)
 			IMTBL_LOG("%s code not confirmed.", *TypeOfConnection)
 			Response.Error.IsSet() ? Msg = Response.Error->ToString() : Msg = Response.JsonObject->GetStringField(TEXT("error"));
 		}
+		Analytics->Track(EventName, Response.success);
 		ResponseDelegate->ExecuteIfBound(FImmutablePassportResult{Response.success, Msg, Response});
 	}
 }
@@ -859,6 +896,7 @@ void UImmutablePassport::OnDeepLinkActivated(FString DeepLink)
 		{
 			FGraphEventRef GameThreadTask = FFunctionGraphTask::CreateAndDispatchWhenReady([this]()
 			{
+				Analytics->Track(UImmutableAnalytics::EEventName::COMPLETE_LOGOUT_PKCE);
 				PKCELogoutResponseDelegate.ExecuteIfBound(FImmutablePassportResult{true, "Logged out"});
 				PKCELogoutResponseDelegate = nullptr;
 				ResetStateFlags(IPS_CONNECTED | IPS_PKCE | IPS_IMX);
