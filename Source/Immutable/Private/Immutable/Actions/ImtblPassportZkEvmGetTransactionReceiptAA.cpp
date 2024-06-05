@@ -9,16 +9,16 @@
 UImtblPassportZkEvmGetTransactionReceiptAA* UImtblPassportZkEvmGetTransactionReceiptAA::ZkEvmGetTransactionReceipt(UObject* WorldContextObject, const FString& Hash)
 {
 	UImtblPassportZkEvmGetTransactionReceiptAA* PassportZkEvmSendTransactionBlueprintNode = NewObject<UImtblPassportZkEvmGetTransactionReceiptAA>();
-	
-	PassportZkEvmSendTransactionBlueprintNode->WorldContextObject = WorldContextObject;
+
+	PassportZkEvmSendTransactionBlueprintNode->SavedWorldContextObject = WorldContextObject;
 	PassportZkEvmSendTransactionBlueprintNode->Hash = Hash;
-	
+
 	return PassportZkEvmSendTransactionBlueprintNode;
 }
 
 void UImtblPassportZkEvmGetTransactionReceiptAA::Activate()
 {
-	if (!WorldContextObject || !WorldContextObject->GetWorld())
+	if (!SavedWorldContextObject || !SavedWorldContextObject->GetWorld())
 	{
 		const FString ErrorMessage = "ZkEvmSendTransaction failed due to missing world or world " "context object.";
 		IMTBL_WARN("%s", *ErrorMessage)
@@ -35,7 +35,7 @@ void UImtblPassportZkEvmGetTransactionReceiptAA::DoZkEvmGetTransactionReceipt(TW
 
 	if (Passport.IsValid())
 	{
-		Passport->ZkEvmGetTransactionReceipt({ Hash }, UImmutablePassport::FImtblPassportResponseDelegate::CreateUObject(this, &UImtblPassportZkEvmGetTransactionReceiptAA::OnZkEvmGetTransactionReceiptResponse));	
+		Passport->ZkEvmGetTransactionReceipt({ Hash }, UImmutablePassport::FImtblPassportResponseDelegate::CreateUObject(this, &UImtblPassportZkEvmGetTransactionReceiptAA::OnZkEvmGetTransactionReceiptResponse));
 	}
 }
 
@@ -44,11 +44,11 @@ void UImtblPassportZkEvmGetTransactionReceiptAA::OnZkEvmGetTransactionReceiptRes
 	if (Result.Success)
 	{
 		auto Receipt = JsonObjectToUStruct<FZkEvmTransactionReceipt>(Result.Response.JsonObject);
-		
+
 		if (Receipt.IsSet())
 		{
 			IMTBL_LOG("ZkEvmGetTransactionReceipt success")
-			Success.Broadcast(TEXT(""), Receipt.GetValue());	
+			Success.Broadcast(TEXT(""), Receipt.GetValue());
 		}
 		else
 		{

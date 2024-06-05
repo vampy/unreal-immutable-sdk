@@ -27,7 +27,7 @@ struct FImmutableEngineVersionData
 	UPROPERTY()
 	FString platformVersion = FPlatformMisc::GetOSVersion().Replace(TEXT(" "), TEXT("_"));
 
-	// Information on device. Examples of expected results: Apple|Apple M3 Max, GenuineIntel|13th Gen Intel(R) Core(TM) i7-13700H, Apple|iPhone15&#44;4. 
+	// Information on device. Examples of expected results: Apple|Apple M3 Max, GenuineIntel|13th Gen Intel(R) Core(TM) i7-13700H, Apple|iPhone15&#44;4.
 	UPROPERTY()
 	FString deviceModel = FGenericPlatformMisc::GetDeviceMakeAndModel();
 };
@@ -62,13 +62,13 @@ struct FImmutablePassportInitDeviceFlowData
 
 	UPROPERTY()
 	FString code;
-	
+
 	UPROPERTY()
 	FString deviceCode;
-	
+
 	UPROPERTY()
 	FString url;
-	
+
 	UPROPERTY()
 	float interval = 0;
 
@@ -79,13 +79,13 @@ USTRUCT()
 struct FImtblUserProfile
 {
 	GENERATED_BODY()
-	
+
 	UPROPERTY()
 	FString email;
-	
+
 	UPROPERTY()
 	FString nickname;
-	
+
 	UPROPERTY()
 	FString sub;
 };
@@ -124,7 +124,7 @@ struct FImmutablePassportCodeConfirmRequestData
 
 	UPROPERTY()
 	FString deviceCode;
-	
+
 	UPROPERTY()
 	float interval = 5;
 
@@ -151,7 +151,7 @@ struct IMMUTABLE_API FImmutablePassportResult
 
 	UPROPERTY()
 	bool Success = false;
-	
+
 	UPROPERTY()
 	FString Message;
 
@@ -216,7 +216,7 @@ struct IMMUTABLE_API FZkEvmTransactionReceiptLog
 	FString logIndex;
 
 	UPROPERTY()
-	bool removed;
+	bool removed = false;
 };
 
 USTRUCT(BlueprintType, meta = (HasNativeBreak = "/Script/Immutable.ImmutableBlueprintLibrary.BreakZkEvmTransactionReceipt"))
