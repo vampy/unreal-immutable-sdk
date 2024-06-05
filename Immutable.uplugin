@@ -30,7 +30,8 @@
   "Plugins": [
     {
       "Name": "WebBrowserWidget",
-      "Enabled": true
+      "Enabled": false,
+	  "Optional": true
     },
     {
       "Name": "BLUI",
