@@ -58,6 +58,6 @@ void UImmutablePassportImxTransferAsyncAction::OnTransferResponse(FImmutablePass
 	}
 	else
 	{
-		Failed.Broadcast(Result.Message, TEXT(""));
+		Failed.Broadcast(Result.Error, TEXT(""));
 	}
 }

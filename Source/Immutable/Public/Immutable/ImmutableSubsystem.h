@@ -36,8 +36,6 @@ public:
 
 	bool IsReady() const { return bIsReady; }
 
-	// FOnGameViewportTick& OnGameViewportTick() { return GameViewportTickEvent; }
-
 	// Execute a delegate when the subsystem is ready (i.e.: when the browser is
 	// running and the Immutable SDK game bridge has loaded).
 	template <class UserClass>
