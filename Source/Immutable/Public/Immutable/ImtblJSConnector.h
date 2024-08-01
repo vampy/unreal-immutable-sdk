@@ -34,7 +34,6 @@ public:
 	DECLARE_MULTICAST_DELEGATE(FOnBridgeReadyDelegate);
 	DECLARE_DELEGATE_OneParam(FOnExecuteJsDelegate, const FString &);
 
-	UImtblJSConnector();
 	void Init(bool bPageLoaded);
 
 	virtual void PostInitProperties() override;

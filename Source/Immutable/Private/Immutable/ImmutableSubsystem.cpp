@@ -8,7 +8,6 @@
 #include "ImtblBrowserUserWidget.h"
 #include "Immutable/ImtblJSConnector.h"
 
-UImmutableSubsystem::UImmutableSubsystem() { IMTBL_LOG_FUNCSIG }
 
 void UImmutableSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
@@ -69,7 +68,7 @@ void UImmutableSubsystem::ManageBridgeDelegateQueue()
 	if (bIsReady)
 	{
 #if USING_BLUI_CEF
-    OnReady.Broadcast(ImtblBlui->GetJSConnector());
+		OnReady.Broadcast(ImtblBlui->GetJSConnector());
 #else
 		OnReady.Broadcast(BrowserWidget->GetJSConnector());
 #endif

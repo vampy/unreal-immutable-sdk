@@ -15,32 +15,15 @@ public class Immutable : ModuleRules
 #if UE_5_1_OR_LATER
 			IncludeOrderVersion = EngineIncludeOrderVersion.Latest;
 #endif
-
-		PublicIncludePaths.AddRange(
-			new string[]
-			{
-				// ... add public include paths required here ...
-			}
-		);
-
-
-		PrivateIncludePaths.AddRange(
-			new string[]
-			{
-				// ... add other private include paths required here ...
-			}
-		);
-
+		RuntimeDependencies.Add("$(PluginDir)/Web/index.js");
 
 		PublicDependencyModuleNames.AddRange(
 			new string[]
 			{
 				"Core",
 				"JsonUtilities",
-				// ... add other public dependencies that you statically link with here ...
 			}
 		);
-
 
 		PrivateDependencyModuleNames.AddRange(
 			new string[]
@@ -52,7 +35,6 @@ public class Immutable : ModuleRules
 				"Json",
 				"UMG",
 				"Projects",
-				// ... add private dependencies that you statically link with here ...
 			}
 		);
 
