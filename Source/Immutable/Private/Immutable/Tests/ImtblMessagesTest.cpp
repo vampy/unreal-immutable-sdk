@@ -2,6 +2,8 @@
 
 #include "Containers/UnrealString.h"
 #include "CoreTypes.h"
+#include "Runtime/Launch/Resources/Version.h"
+
 #include "Immutable/ImmutablePassport.h"
 
 #include "Misc/AutomationTest.h"
@@ -15,7 +17,11 @@
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FImtblMessagesTest, "Immutable.JSMessages", EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::ServerContext | EAutomationTestFlags::ProductFilter)
+#if ((ENGINE_MAJOR_VERSION <= 4) || (ENGINE_MAJOR_VERSION == 5 && ENGINE_MINOR_VERSION <= 4))
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FImtblMessagesTest, "Immutable.JSMessages", EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::EngineFilter)
+#else
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FImtblMessagesTest, "Immutable.JSMessages", EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::EngineFilter)
+#endif
 
 // EAutomationTestFlags::SmokeFilter -- note that SmokeFilter will run
 // automatically during cooking
@@ -34,7 +40,7 @@ bool FImtblMessagesTest::RunTest(const FString& Parameters)
 	// string
 	{
 		const FString RedirectUri = "https://example.com";
-		const FImmutablePassportInitData InitData{ClientId, RedirectUri, ImmutablePassportAction::EnvSandbox};
+		const FImmutablePassportInitData InitData { ClientId, RedirectUri, ImmutablePassportEnvironmentConstants::EnvironmentSandbox };
 		FString ExpectedJson = "{\"clientId\":\"MyExampleClientId\",\"redirectUri\":\"https://" "example.com\",\"environment\":\"sandbox\"";
 		ExpectedJson += ",\"engineVersion\":{";
 		ExpectedJson += "\"engine\":\"unreal\"";
@@ -51,7 +57,7 @@ bool FImtblMessagesTest::RunTest(const FString& Parameters)
 	// an FImmutablePassportInitData with an empty redirectUri should leave the
 	// redirectUri field out of the json string when converted
 	{
-		const FImmutablePassportInitData InitData{ClientId, "", ImmutablePassportAction::EnvSandbox};
+		const FImmutablePassportInitData InitData { ClientId, "", ImmutablePassportEnvironmentConstants::EnvironmentSandbox };
 		FString ExpectedJson = "{\"clientId\":\"MyExampleClientId\",\"environment\":\"sandbox\"";
 		ExpectedJson += ",\"engineVersion\":{";
 		ExpectedJson += "\"engine\":\"unreal\"";

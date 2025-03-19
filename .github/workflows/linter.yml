@@ -13,8 +13,12 @@
       push:
         branches-ignore: [main]
         # Remove the line above to run when pushing to master
+        paths-ignore:
+          - 'openapi.json'
       pull_request:
         branches: [main]
+        paths-ignore:
+          - 'openapi.json'
     
     ###############
     # Set the Job #
@@ -65,4 +69,4 @@
               VALIDATE_CPP: false
               VALIDATE_CSHARP: false
               VALIDATE_CLANG_FORMAT: false
-              FILTER_REGEX_EXCLUDE: .*/Web/index.js
+              FILTER_REGEX_EXCLUDE: '.*\/openapi\.json|.*\/Web\/index\.js'

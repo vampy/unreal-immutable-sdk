@@ -8,7 +8,7 @@
 
 // This is the version of the Unreal Immutable SDK that is being used. This is not the version of the engine.
 // This hardcoded value will be updated by a workflow during the release process.
-#define ENGINE_SDK_VERSION TEXT("1.2.10")
+#define ENGINE_SDK_VERSION TEXT("1.9.0")
 
 USTRUCT()
 struct FImmutableEngineVersionData
@@ -38,26 +38,52 @@ struct FImmutableEngineVersionData
 	FString deviceModel = FGenericPlatformMisc::GetDeviceMakeAndModel();
 };
 
+/**
+ * Structure to hold initialisation data for the Immutable Passport.
+ */
 USTRUCT()
 struct IMMUTABLE_API FImmutablePassportInitData
 {
 	GENERATED_BODY()
 
+	/** The Client ID. */
 	UPROPERTY()
 	FString clientId;
 
+	/**
+	 * (Android, iOS, and macOS only)
+	 * The URL where the browser will redirect after successful authentication.
+	 */
 	UPROPERTY()
 	FString redirectUri;
 
+	/** The URL where the browser will redirect after logout is complete. */
 	UPROPERTY()
 	FString logoutRedirectUri;
 
+	/** The environment to connect to.
+	 * @note Default value is "sandbox"
+	 */
 	UPROPERTY()
-	FString environment = ImmutablePassportAction::EnvSandbox;
+	FString environment = ImmutablePassportEnvironmentConstants::EnvironmentSandbox;
 
+	/**
+	 * Whether silent logout is enabled.
+	 * If true, logout silently (without popping up a new browser tab)
+	 */
+	UPROPERTY()
+	bool isSilentLogout = false;
+
+	/** Information about engine version */
 	UPROPERTY()
 	FImmutableEngineVersionData engineVersion;
 
+	/**
+	 * Converts the FImmutablePassportInitData structure to a JSON string representation.
+	 *
+	 * @return 	A JSON string representation of the FImmutablePassportInitData structure.
+	 * 			Returns an empty string if the conversion fails.
+	 */
 	FString ToJsonString() const;
 };
 
@@ -97,7 +123,7 @@ struct FImtblUserProfile
 };
 
 USTRUCT()
-struct FImmutablePassportZkEvmRequestAccountsData
+struct IMMUTABLE_API FImmutablePassportZkEvmRequestAccountsData
 {
 	GENERATED_BODY()
 
@@ -155,12 +181,15 @@ struct IMMUTABLE_API FImmutablePassportResult
 {
 	GENERATED_BODY()
 
+	/** Whether the response was successful. */
 	UPROPERTY()
 	bool Success = false;
 
+	/** Error string for the response. */
 	UPROPERTY()
 	FString Error;
 
+	/** Response payload. */
 	FImtblJSResponse Response;
 };
 

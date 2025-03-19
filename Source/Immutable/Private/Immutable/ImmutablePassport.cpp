@@ -4,10 +4,10 @@
 
 #include "ImmutableAnalytics.h"
 #include "Immutable/Misc/ImtblLogging.h"
-#include "Immutable/ImmutableResponses.h"
 #include "Immutable/ImtblJSConnector.h"
 #include "JsonObjectConverter.h"
 #include "Immutable/ImmutableSaveGame.h"
+#include "Immutable/ImmutableSettings.h"
 #include "Kismet/GameplayStatics.h"
 
 #if PLATFORM_ANDROID | PLATFORM_IOS | PLATFORM_MAC
@@ -40,6 +40,45 @@ void UImmutablePassport::Initialize(const FImmutablePassportInitData& Data, cons
 	}
 
 	InitData = Data;
+
+	CallJS(ImmutablePassportAction::INIT, InitData.ToJsonString(), ResponseDelegate, FImtblJSResponseDelegate::CreateUObject(this, &UImmutablePassport::OnInitializeResponse), false);
+}
+
+void UImmutablePassport::Initialize(const FImtblPassportResponseDelegate& ResponseDelegate)
+{
+	check(JSConnector.IsValid());
+
+	auto Settings = GetDefault<UImmutableSettings>();
+
+	if (Settings)
+	{
+		ResponseDelegate.ExecuteIfBound(FImmutablePassportResult{false, "Failed to find Immutable Settings"});
+
+		return;
+	}
+
+	UApplicationConfig* ApplicationConfig = Settings->DefaultApplicationConfig.GetDefaultObject();
+
+	if (!ApplicationConfig)
+	{
+		ResponseDelegate.ExecuteIfBound(FImmutablePassportResult{false, "Failed to retrieve default application configuration for Passport initialization"});
+
+		return;
+	}
+
+	InitData.clientId = ApplicationConfig->GetClientID();
+	InitData.environment = ApplicationConfig->GetEnvironmentString();
+	InitData.redirectUri = ApplicationConfig->GetRedirectURL();
+	InitData.logoutRedirectUri = ApplicationConfig->GetLogoutURL();
+
+	LoadPassportSettings();
+	// we check saved settings in case if player has not logged out properly
+	if (InitData.logoutRedirectUri.IsEmpty() && IsStateFlagsSet(IPS_PKCE))
+	{
+		IMTBL_ERR("Logout URI is empty. Previously logged in via PKCE.")
+		ResetStateFlags(IPS_PKCE);
+		SavePassportSettings();
+	}
 
 	CallJS(ImmutablePassportAction::INIT, InitData.ToJsonString(), ResponseDelegate, FImtblJSResponseDelegate::CreateUObject(this, &UImmutablePassport::OnInitializeResponse), false);
 }
@@ -127,6 +166,11 @@ void UImmutablePassport::ZkEvmSendTransactionWithConfirmation(const FImtblTransa
 void UImmutablePassport::ZkEvmGetTransactionReceipt(const FZkEvmTransactionReceiptRequest& Request, const FImtblPassportResponseDelegate& ResponseDelegate)
 {
 	CallJS(ImmutablePassportAction::ZkEvmGetTransactionReceipt, UStructToJsonString(Request), ResponseDelegate, FImtblJSResponseDelegate::CreateUObject(this, &UImmutablePassport::OnBridgeCallbackResponse));
+}
+
+void UImmutablePassport::ZkEvmSignTypedDataV4(const FString& RequestJsonString, const FImtblPassportResponseDelegate& ResponseDelegate)
+{
+	CallJS(ImmutablePassportAction::ZkEvmSignTypedDataV4, RequestJsonString, ResponseDelegate, FImtblJSResponseDelegate::CreateUObject(this, &UImmutablePassport::OnBridgeCallbackResponse));
 }
 
 void UImmutablePassport::ConfirmCode(const FString& DeviceCode, const float Interval, const FImtblPassportResponseDelegate& ResponseDelegate)
@@ -627,10 +671,12 @@ void UImmutablePassport::LoadPassportSettings()
 {
 	IMTBL_LOG_FUNC("");
 
-	UImmutableSaveGame* SaveGameInstance = Cast<UImmutableSaveGame>(UGameplayStatics::LoadGameFromSlot(PASSPORT_SAVE_GAME_SLOT_NAME, GetWorldUserIndex()));
-	if (SaveGameInstance)
+	if (UGameplayStatics::DoesSaveGameExist(PASSPORT_SAVE_GAME_SLOT_NAME, GetWorldUserIndex()))
 	{
-		SaveGameInstance->bWasConnectedViaPKCEFlow ? SetStateFlags(IPS_PKCE) : ResetStateFlags(IPS_PKCE);
+		if (const UImmutableSaveGame* SaveGameInstance = Cast<UImmutableSaveGame>(UGameplayStatics::LoadGameFromSlot(PASSPORT_SAVE_GAME_SLOT_NAME, GetWorldUserIndex())))
+		{
+			SaveGameInstance->bWasConnectedViaPKCEFlow ? SetStateFlags(IPS_PKCE) : ResetStateFlags(IPS_PKCE);
+		}
 	}
 }
 

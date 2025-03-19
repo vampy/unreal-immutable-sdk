@@ -32,23 +32,26 @@ void UImtblBlui::OnLogEvent(const FString& LogText)
 	IMTBL_LOG_FUNC("LogEvent: %s", *LogText);
 }
 
+
 void UImtblBlui::WorldTickStart(UWorld* World, ELevelTick LevelTick, float X)
 {
 #if USING_BLUI_CEF
-	if (!GetBluEye()->IsBrowserLoading() && !bLoadedIndexJS)
+	if (UBluEye* BluEye = GetBluEye())
 	{
-		FString JavaScript;
-
-		IMTBL_LOG("BLUI CEF Browser loaded");
-		bLoadedIndexJS = true;
-		if (FImmutableUtilities::LoadGameBridge(JavaScript))
+		if (!BluEye->IsBrowserLoading() && !bLoadedIndexJS)
 		{
-			GetBluEye()->ExecuteJS(JavaScript);
+			FString JavaScript;
+
+			IMTBL_LOG("BLUI CEF Browser loaded");
+			bLoadedIndexJS = true;
+			if (FImmutableUtilities::LoadGameBridge(JavaScript))
+			{
+				BluEye->ExecuteJS(JavaScript);
+			}
 		}
 	}
 #endif
 }
-
 void UImtblBlui::BeginDestroy()
 {
 #if USING_BLUI_CEF
@@ -93,7 +96,11 @@ void UImtblBlui::Init()
 	BluEye->bEnabled = true;
 	IMTBL_LOG("Events subscribed")
 
-	BluEye->Init();
+	if (!BluEye->Init())
+	{
+		IMTBL_ERR("BluEye is not initialised")
+		return;
+	}
 	IMTBL_LOG("BluEye Initialised")
 
 	// We're attempting to replicate the process that Unreal's WebBrowser

@@ -4,7 +4,6 @@
 
 #include "CoreMinimal.h"
 #include "JsonObjectConverter.h"
-#include "Misc/EngineVersion.h"
 #include "Runtime/Core/Public/HAL/Platform.h"
 #include "UObject/Object.h"
 #include "Immutable/ImtblJSConnector.h"
@@ -15,6 +14,13 @@
 
 class UImmutableAnalytics;
 
+/**
+ * Converts a UStruct instance to a JSON string representation.
+ *
+ * @param InStruct 	The UStruct instance to convert.
+ *
+ * @return 			A JSON string representation of the input struct.
+ */
 template <typename UStructType>
 FString UStructToJsonString(const UStructType& InStruct)
 {
@@ -23,6 +29,13 @@ FString UStructToJsonString(const UStructType& InStruct)
 	return OutString;
 }
 
+/**
+ * Converts a JSON object to a UStruct instance.
+ *
+ * @param JsonObject 	The JSON object to convert into a UStruct.
+ *
+ * @return 				An optional UStruct instance, or an empty optional if conversion fails.
+ */
 template <typename UStructType>
 TOptional<UStructType> JsonObjectToUStruct(const TSharedPtr<FJsonObject>& JsonObject)
 {
@@ -51,19 +64,64 @@ class IMMUTABLE_API UImmutablePassport : public UObject
 	friend class UImmutableSubsystem;
 
 public:
+	/**
+	 * Delegate used for when passport is ready.
+	 */
 	DECLARE_MULTICAST_DELEGATE(FOnPassportReadyDelegate);
 
+	/**
+	 * Delegate used for JavaScript callbacks.
+	 */
 	DECLARE_DELEGATE_OneParam(FImtblPassportResponseDelegate, FImmutablePassportResult);
 
 	// Custom delegate to launch an URL
 	DECLARE_DELEGATE_ThreeParams(FImtblPassportLaunchURLDelegate, const FString& /*URL*/, const FString& /*Params*/, FString& /*OutError*/);
 
+	/**
+	 * Initialises passport. This sets up the Passport instance, configures the web browser, and waits for the ready signal.
+	 *
+	 * @param InitData 			Parameters to initialise the passport with.
+	 * @param ResponseDelegate 	Callback delegate.
+	 */
 	void Initialize(const FImmutablePassportInitData& InitData, const FImtblPassportResponseDelegate& ResponseDelegate);
+
+	/**
+	 * Initialises passport. This sets up the Passport instance, configures the web browser, and waits for the ready signal.
+	 * @details The functionality is the same with Initilize above except it obtains Passport initilization data from ApplicationConfig asset
+	 * @see UApplicationConfig
+	 *
+	 * @param ResponseDelegate 	Callback delegate.
+	 */
+	void Initialize(const FImtblPassportResponseDelegate& ResponseDelegate);
+
+	/**
+	 * Logs the user into Passport via device code auth and sets up the Immutable X provider.
+	 *
+	 * This will open the user's default browser and take them through Passport login.
+	 * @param IsConnectImx 		If true, the "re-connect" method is used to authenticate into Passport with Immutable X.
+	 * 							Else, "re-login" is used for authentication. To access a wallet with Immutable X or zkEVM later, you must call "Connect" again with this value set to true, or use "ConnectEvm."
+	 * @param TryToRelogin 		If true, the game bridge will use a cached session to re-connect or re-login the user, avoiding the need to open a web browser. If this attempt fails, it will fall back to device code authentication.
+	 * @param ResponseDelegate 	Callback delegate.
+	 */
 	void Connect(bool IsConnectImx, bool TryToRelogin, const FImtblPassportResponseDelegate& ResponseDelegate);
 #if PLATFORM_ANDROID | PLATFORM_IOS | PLATFORM_MAC
+	/**
+	 * (Android, iOS and macOS only) Logs into Passport using Authorisation Code Flow with Proof Key for Code Exchange (PKCE)
+	 *
+	 * @param IsConnectImx 		If true, player will go through the device code auth login flow and connect to Immutable X.
+	 * 							Else, initiate only the device auth login flow.
+	 * @param ResponseDelegate 	Callback delegate.
+	 */
 	void ConnectPKCE(bool IsConnectImx, const FImtblPassportResponseDelegate& ResponseDelegate);
 #endif
 
+	/**
+	 * Logs the user out of Passport.
+	 *
+	 * @param DoHardLogout 		If true, clears sessions and any stored credentials from both the SDK/plugin and the browser.
+	 * 							Else, clears session and any stored credentials from the SDK only, browser session and stored credentials are cleared when session expires.
+	 * @param ResponseDelegate 	Callback delegate.
+	 */
 	void Logout(bool DoHardLogout, const FImtblPassportResponseDelegate& ResponseDelegate);
 
 	/**
@@ -120,10 +178,49 @@ public:
 	 */
 	void ZkEvmGetTransactionReceipt(const FZkEvmTransactionReceiptRequest& Request, const FImtblPassportResponseDelegate& ResponseDelegate);
 
+	/**
+	 * Generate a signature for a typed data V4 object
+	 * Signs the EIP-712 structured message in JSON string format using the logged-in Passport account.
+	 * @see https://eips.ethereum.org/EIPS/eip-712
+	 * @param RequestJsonString The EIP-712 structured data in JSON string format
+	 * @param ResponseDelegate The response delegate of type
+	 * FImtblPassportResponseDelegate to call on response from JS.
+	 */
+	void ZkEvmSignTypedDataV4(const FString& RequestJsonString, const FImtblPassportResponseDelegate& ResponseDelegate);
+
+	/**
+	 * Gets the currently saved ID token without verifying its validity.
+	 *
+	 * @param ResponseDelegate Callback delegate.
+	 */
 	void GetIdToken(const FImtblPassportResponseDelegate& ResponseDelegate);
+
+	/**
+	 * Gets the currently saved access token without verifying its validity.
+	 *
+	 * @param ResponseDelegate Callback delegate.
+	 */
 	void GetAccessToken(const FImtblPassportResponseDelegate& ResponseDelegate);
+
+	/**
+	 * Gets the wallet address of the logged in user.
+	 *
+	 * @param ResponseDelegate Callback delegate.
+	 */
 	void GetAddress(const FImtblPassportResponseDelegate& ResponseDelegate);
+
+	/**
+	 * Retrieves the email address of the user whose credentials are currently stored.
+	 *
+	 * @param ResponseDelegate Callback delegate.
+	 */
 	void GetEmail(const FImtblPassportResponseDelegate& ResponseDelegate);
+
+	/**
+	 * Gets the list of external wallets the user has linked to their Passport account via the
+	 *
+	 * @param ResponseDelegate Callback delegate.
+	 */
 	void GetLinkedAddresses(const FImtblPassportResponseDelegate& ResponseDelegate);
 
 	/**
@@ -172,23 +269,68 @@ public:
 		CustomLaunchURLDelegate = NewDelegate;
 	}
 
+	/**
+	 * Retrieves the "result" as string field from Response.JsonObject.
+	 *
+	 * @param Response 	The response to use to retrieve the "result" as string field.
+	 *
+	 * @return 			The "result" as string field from Response.JsonObject if Response.JsonObject is valid, otherwise, an empty string.
+	 */
 	static FString GetResponseResultAsString(const FImtblJSResponse& Response);
+
+	/**
+	 * Retrieves the "result" as bool field from Response.JsonObject.
+	 *
+	 * @param Response 	The response to use to retrieve the "result" as bool field.
+	 *
+	 * @return 			True if Response.JsonObject is valid, otherwise, false.
+	 */
 	static bool GetResponseResultAsBool(const FImtblJSResponse& Response);
+
+	/**
+	 * Retrieves the "result" as array field from Response.JsonObject and extracting them into an array of FString.
+	 *
+	 * @param Response 	The response to use to retrieve and extract.
+	 *
+	 * @return 			An array of FString extracted from the "result" field if Response.JsonObject is valid, otherwise, an empty array.
+	 */
 	static TArray<FString> GetResponseResultAsStringArray(const FImtblJSResponse& Response);
 
 #if PLATFORM_ANDROID
+	/**
+	 * Handle deep linking. This is called from Android JNI.
+	 *
+	 * @param DeepLink The deep link URL, passed from the Android JNI. This string contains the deep link data to be processed.
+	 */
 	void HandleDeepLink(FString DeepLink) const;
+
+	/*
+	 * Handles the dismissal of custom tabs.
+	 *
+	 * @param Url The URL associated with the custom tab that was dismissed.
+	 */
 	void HandleCustomTabsDismissed(FString Url);
 #elif PLATFORM_IOS | PLATFORM_MAC
+	/**
+	 * Handle deep linking. This is called from iOS/Mac native code.
+	 *
+	 * @param DeepLink	The deep link URL, passed from the iOS/Mac. This string contains the deep link data to be processed.
+	 */
 	void HandleDeepLink(NSString* sDeepLink) const;
 #endif
 
 protected:
 #if PLATFORM_ANDROID
+	/*
+	 * Delegate used for handling the dismissal of the PKCE flow on Android.
+	 */
 	DECLARE_DELEGATE(FImtblPassportOnPKCEDismissedDelegate);
 #endif
 
 #if PLATFORM_ANDROID | PLATFORM_IOS | PLATFORM_MAC
+	/*
+	 * Delegate used for handling deep links.
+	 */
 	DECLARE_DELEGATE_OneParam(FImtblPassportHandleDeepLinkDelegate, FString);
 #endif
 
@@ -197,61 +339,182 @@ protected:
     void CallJS(const FString& Action, const FString& Data, const FImtblPassportResponseDelegate& ClientResponseDelegate, const FImtblJSResponseDelegate& HandleJSResponse, const bool bCheckInitialized = true);
 
 	void Setup(TWeakObjectPtr<class UImtblJSConnector> Connector);
+
+	/**
+	 * Reinstate the connection based on the provided JavaScript response.
+	 *
+	 * @param Response The JavaScript response object to reinstate the connection.
+	 */
 	void ReinstateConnection(FImtblJSResponse Response);
-	// Ensures that Passport has been initialized before calling JS
+
+	/**
+	 * Checks if Passport has been initialised before allowing an action to proceed.
+	 *
+	 * @param Action 			The name of the JavaScript action to be called. Used for logging purposes.
+	 * @param ResponseDelegate 	Delegate to handle the response if the passport is not initialised.
+	 *
+	 * @return 					True if Passport is initialised, otherwise, false.
+	 */
 	bool CheckIsInitialized(const FString& Action, const FImtblPassportResponseDelegate& ResponseDelegate) const;
-	// Pulls the ResponseDelegate from the ResponseDelegates map and returns it
+
+	/**
+	 * Retrieves the response delegate associated with a given JavaScript response from ResponseDelegates TMap.
+	 *
+	 * @param Response 	The Javascript response object containing the request Id.
+	 *
+	 * @return 			A TOptional containing the response delegate if found, otherwise, an empty TOptional.
+	 */
 	TOptional<FImtblPassportResponseDelegate> GetResponseDelegate(const FImtblJSResponse& Response);
+
+	/**
+	 * Confirms the device code by calling the appropriate JavaScript action.
+	 *
+	 * @param DeviceCode 		The device code to be confirmed.
+	 * @param Interval 			The time interval to wait between attempts.
+	 * @param ResponseDelegate 	A delegate to handle the response from the confirmation request.
+	 */
 	void ConfirmCode(const FString& DeviceCode, const float Interval, const FImtblPassportResponseDelegate& ResponseDelegate);
 
-	// common response callback
+	/**
+	 * Common callback that handles the responses from game bridge
+	 *
+	 * @param Response The JavaScript response object containing the result of the callback.
+	 */
 	void OnBridgeCallbackResponse(FImtblJSResponse Response);
 	// callbacks with custom response manipulations
 	void OnInitializeResponse(FImtblJSResponse Response);
+
+	/**
+	 * Callback from init device flow (device code auth login flow).
+	 *
+	 * @param Response The JavaScript response object containing the result of the callback.
+	 */
 	void OnInitDeviceFlowResponse(FImtblJSResponse Response);
+
+	/**
+	 * Callback from logout.
+	 *
+	 * @param Response The JavaScript response object containing the result of the callback.
+	 */
 	void OnLogoutResponse(FImtblJSResponse Response);
+
+	/**
+	 * Callback from confirm code.
+	 *
+	 * @param Response The JavaScript response object containing the result of the callback.
+	 */
 	void OnConfirmCodeResponse(FImtblJSResponse Response);
 
 	// mobile platform callbacks
 #if PLATFORM_ANDROID | PLATFORM_IOS | PLATFORM_MAC
+	/**
+	 * Callback from Get PKCE Auth URL.
+	 *
+	 * @param Response The JavaScript response object containing the result of the callback.
+	 */
 	void OnGetPKCEAuthUrlResponse(FImtblJSResponse Response);
+
+	/*
+	 * Callback from Connect PKCE.
+	 *
+	 * @param Response The JavaScript response object containing the result of the callback.
+	 */
 	void OnConnectPKCEResponse(FImtblJSResponse Response);
+
+	/*
+	 * Callback when deep link is activated.
+	 *
+	 * @param DeepLink The deep link URL that was activated.
+	 */
 	void OnDeepLinkActivated(FString DeepLink);
-    void CompleteLoginPKCEFlow(FString Url);
+
+	/*
+	 * Completes the PKCE login flow using the provided URL.
+	 *
+	 * @param Url The URL containing the authorisation code and state.
+	 */
+	void CompleteLoginPKCEFlow(FString Url);
 #endif
 
 #if PLATFORM_ANDROID
+	/**
+	 * Callback when Login PKCE is dismissed.
+	 */
 	void HandleOnLoginPKCEDismissed();
+
+	/**
+	 * Calls a static void method in Java using JNI.
+	 *
+	 * @param Env		The JNI (Java Native Interface) environment.
+	 * @param Class		The Java class containing the method.
+	 * @param Method	The method ID of the method to call.
+	 * @param ...		Additional parameters to forward to the method to call.
+	 */
 	void CallJniStaticVoidMethod(JNIEnv* Env, const jclass Class, jmethodID Method, ...);
+
+	/**
+	 * Opens a specified URL on Android using Chrome Custom Tabs via JNI if Chrome is installed.
+	 * Else, it launches the URL in any available browser.
+	 *
+	 * @param Url The URL to launch.
+	 */
 	void LaunchAndroidUrl(FString Url);
 #endif
 
+	/**
+	 * Sets the specified state flags by applying a bitwise OR operation.
+	 * @param StateIn The state flags to be set.
+	 */
 	void SetStateFlags(uint8 StateIn);
+
+	/**
+	 * Resets the specified state flags by applying a bitwise AND operation with the negated flags.
+	 * @param StateIn The state flags to be reset.
+	 */
 	void ResetStateFlags(uint8 StateIn);
+
+	/**
+	 * Checks if the specified state flags are set.
+	 * @param StateIn The state flags to check.
+	 * @return True if all StateIn flags are set, otherwise, false.
+	 */
 	bool IsStateFlagsSet(uint8 StateIn) const;
 
 protected:
+	/** Cached pointer to the JavaScript connector used for communicating JavaScript calls. */
 	TWeakObjectPtr<UImtblJSConnector> JSConnector;
+	/** Cached passport init data. */
 	FImmutablePassportInitData InitData;
 	FDelegateHandle BridgeReadyHandle;
+	/** A map of JavaScript calls request Ids to their response callbacks. */
 	TMap<FString, FImtblPassportResponseDelegate> ResponseDelegates;
 
 #if PLATFORM_ANDROID
+	/** Delegate called when the PKCE flow is dismissed. */
 	FImtblPassportOnPKCEDismissedDelegate OnPKCEDismissed;
 #endif
 
 #if PLATFORM_ANDROID | PLATFORM_IOS | PLATFORM_MAC
+	/** Delegate for handling deep link activation. */
 	FImtblPassportHandleDeepLinkDelegate OnHandleDeepLink;
 	// Since the second part of PKCE is triggered by deep links, saving the
 	// response delegate here so it's easier to get
 	FImtblPassportResponseDelegate PKCEResponseDelegate;
+	/** Delegate for handling PCKE logout. */
 	FImtblPassportResponseDelegate PKCELogoutResponseDelegate;
 	// bool IsPKCEConnected = false;
 #endif
 
 
 private:
+	/**
+	 * Saves the current Passport settings to save game object.
+	 */
 	void SavePassportSettings();
+
+	/**
+	 * Loads the passport settings from save game object.
+	 */
 	void LoadPassportSettings();
 
 	UGameInstance* GetGameInstance() const;
@@ -271,10 +534,12 @@ private:
 		IPS_HARDLOGOUT = 1 << 6
 	};
 
+	/** Passport state flags. */
 	uint8 StateFlags = IPS_NONE;
 
 	FImtblPassportLaunchURLDelegate CustomLaunchURLDelegate;
 
+	/** Pointer to the analytics manager instance for tracking events and metrics. */
 	UPROPERTY()
 	UImmutableAnalytics* Analytics = nullptr;
 };

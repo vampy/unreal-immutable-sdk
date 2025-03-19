@@ -8,7 +8,7 @@ public class Immutable : ModuleRules
 {
 	public Immutable(ReadOnlyTargetRules Target) : base(Target)
 	{
-		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
+		PCHUsage = ModuleRules.PCHUsageMode.UseExplicitOrSharedPCHs;
 		IWYUSupport = IWYUSupport.Full;
 		bUseUnity = true;
 
@@ -17,36 +17,53 @@ public class Immutable : ModuleRules
 #endif
 		RuntimeDependencies.Add("$(PluginDir)/Web/index.js");
 
+		PublicDependencyModuleNames.AddRange(new string[]
+		{
+			"Core",
+			"JsonUtilities"
+		});
+
+		PublicDependencyModuleNames.AddRange(new string[]
+		{
+			"ImmutableCore"
+		});
+
+		PrivateDependencyModuleNames.AddRange(new string[]
+		{
+			"CoreUObject",
+			"Engine",
+			"Slate",
+			"SlateCore",
+			"Json",
+			"UMG",
+			"Projects",
+			"DeveloperSettings",
+			"HTTP",
+		});
+
+#if UE_5_1_OR_LATER
 		PublicDependencyModuleNames.AddRange(
 			new string[]
 			{
-				"Core",
-				"JsonUtilities",
+				"WebBrowser",
+				"WebBrowserWidget"
 			}
 		);
+#else
+		PrivateDependencyModuleNames.Add("BluExtension");
+		if (Target.Platform == UnrealTargetPlatform.Win64)
+		{
+			PublicDependencyModuleNames.Add("Blu");
+		}
+#endif
 
-		PrivateDependencyModuleNames.AddRange(
-			new string[]
-			{
-				"CoreUObject",
-				"Engine",
-				"Slate",
-				"SlateCore",
-				"Json",
-				"UMG",
-				"Projects",
-			}
-		);
-
-#if UE_5_0_OR_LATER
-		PrivateDependencyModuleNames.Add("WebBrowserWidget");
-		PrivateDependencyModuleNames.Add("WebBrowser");
-		PublicDefinitions.Add("USING_BUNDLED_CEF=1");
-		PublicDefinitions.Add("USING_BLUI_CEF=0");
+#if UE_5_1_OR_LATER
+			PrivateDependencyModuleNames.Add("WebBrowser");
+			PublicDefinitions.Add("USING_BUNDLED_CEF=1");
+			PublicDefinitions.Add("USING_BLUI_CEF=0");
 #else
 		if (Target.Platform == UnrealTargetPlatform.Win64)
 		{
-			PrivateDependencyModuleNames.Add("Blu");
 			PublicDefinitions.Add("USING_BLUI_CEF=1");
 		}
 		else

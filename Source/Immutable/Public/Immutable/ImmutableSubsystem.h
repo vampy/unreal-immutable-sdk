@@ -2,7 +2,7 @@
 
 #pragma once
 
-#include "CoreMinimal.h"
+#include "ImmutablePassport.h"
 #include "Subsystems/GameInstanceSubsystem.h"
 #include "ImmutablePassport.h"
 

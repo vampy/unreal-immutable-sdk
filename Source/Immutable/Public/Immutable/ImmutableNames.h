@@ -16,10 +16,11 @@ namespace ImmutablePassportAction
 	const FString ZkEvmSendTransaction = TEXT("zkEvmSendTransaction");
 	const FString zkEvmSendTransactionWithConfirmation = TEXT("zkEvmSendTransactionWithConfirmation");
 	const FString ZkEvmGetTransactionReceipt = TEXT("zkEvmGetTransactionReceipt");
+	const FString ZkEvmSignTypedDataV4 = TEXT("zkEvmSignTypedDataV4");
 
 #if PLATFORM_ANDROID | PLATFORM_IOS | PLATFORM_MAC
 	const FString GetPKCEAuthUrl = TEXT("getPKCEAuthUrl");
-	const FString LOGIN_PKCE = TEXT("loginPKCE");; //+
+	const FString LOGIN_PKCE = TEXT("loginPKCE");
 	const FString CONNECT_PKCE = TEXT("connectPKCE");
 #endif
 
@@ -30,10 +31,14 @@ namespace ImmutablePassportAction
 	const FString GetLinkedAddresses = TEXT("getLinkedAddresses");
 	const FString ImxTransfer = TEXT("imxTransfer");
 	const FString ImxBatchNftTransfer = TEXT("imxBatchNftTransfer");
-	const FString EnvSandbox = TEXT("sandbox");
-	const FString EnvProduction = TEXT("production");
 	const FString ImxIsRegisteredOffchain = TEXT("isRegisteredOffchain");
 	const FString ImxRegisterOffchain = TEXT("registerOffchain");
 
 	const FString TRACK = TEXT("track");
 } // namespace ImmutablePassportAction
+
+namespace ImmutablePassportEnvironmentConstants
+{
+	const FString EnvironmentSandbox = TEXT("sandbox");
+	const FString EnvironmentProduction = TEXT("production");
+}
