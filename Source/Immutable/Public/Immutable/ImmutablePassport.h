@@ -334,10 +334,25 @@ protected:
 	DECLARE_DELEGATE_OneParam(FImtblPassportHandleDeepLinkDelegate, FString);
 #endif
 
+	/**
 	// Calls JS with the given Action and Data, and registers the given
-    // ResponseDelegate to be called when JS responds
+	 * Calls JavaScript function to the connected browser with specified parameters.
+	// ResponseDelegate to be called when JS responds
+	 *
+	void CallJS(const FString& Action, const FString& Data, const FImtblPassportResponseDelegate& ClientResponseDelegate, const FImtblJSResponseDelegate& HandleJSResponse, const bool bCheckInitialized = true);
+	 * @param Action 					The name of the JavaScript action to be called.
+	 * @param Data 						The data to be passed to the JavaScript action as FString.
+	 * @param ClientResponseDelegate 	Delegate to handle the response from the client.
+	 * @param HandleJSResponse 			Delegate to handle the response from the JavaScript function.
+	 * @param bCheckInitialized 		(Optional) If true, check if the passport is initialised. Else, initialised checks are skipped.
+	 */
     void CallJS(const FString& Action, const FString& Data, const FImtblPassportResponseDelegate& ClientResponseDelegate, const FImtblJSResponseDelegate& HandleJSResponse, const bool bCheckInitialized = true);
 
+	/**
+	 * Sets up passport with the JavaScript connector
+	 *
+	 * @param Connector A weak pointer to the JavaScript Connector. If the connector is invalid set up will be aborted.
+	 */
 	void Setup(TWeakObjectPtr<class UImtblJSConnector> Connector);
 
 	/**
@@ -381,7 +396,12 @@ protected:
 	 * @param Response The JavaScript response object containing the result of the callback.
 	 */
 	void OnBridgeCallbackResponse(FImtblJSResponse Response);
-	// callbacks with custom response manipulations
+
+	/**
+	 * Callback from init (passport).
+	 *
+	 * @param Response The JavaScript response object containing the result of the callback.
+	 */
 	void OnInitializeResponse(FImtblJSResponse Response);
 
 	/**
@@ -521,6 +541,10 @@ private:
 	int32 GetWorldUserIndex() const;
 
 	void LaunchURL(const FString& URL, const FString& Params, FString& OutError);
+
+	/**
+	 * State flgas for Immutable Passport.
+	 */
 
 	enum EImmutablePassportStateFlags : uint8
 	{
