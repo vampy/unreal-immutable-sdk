@@ -94,14 +94,14 @@ void UImtblBrowserWidget::SetBrowserContent()
 		IMTBL_ERR("Browser widget is not valid")
 		return;
 	}
-	
+
 	FString JavaScript;
-	
+
 	if (FImmutableUtilities::LoadGameBridge(JavaScript))
 	{
 		FString IndexHtml = FString("<!doctype html><html lang='en'><head><meta " "charset='utf-8'><title>GameSDK Bridge</title><script>") + JavaScript + FString("</script></head><body><h1>Bridge Running</h1></body></html>");
-		
-		WebBrowserWidget->LoadString(IndexHtml, TEXT("file:///immutable/index.html"));	
+
+		WebBrowserWidget->LoadString(IndexHtml, TEXT("file:///immutable/index.html"));
 	}
 #endif
 }
@@ -136,35 +136,43 @@ TSharedRef<SWidget> UImtblBrowserWidget::RebuildWidget()
 	}
 	else
 	{
+
+#if WITH_EDITOR
 		FBrowserContextSettings BrowserContextSettings{FGuid::NewGuid().ToString()};
 
 		// Set per PIE window web cache
-		if (WITH_EDITOR)
-		{
-			// BrowserContextSettings.bPersistSessionCookies = false;
-			const IWebBrowserSingleton* WebBrowserSingleton = IWebBrowserModule::Get().GetSingleton();
+		// BrowserContextSettings.bPersistSessionCookies = false;
+		const IWebBrowserSingleton* WebBrowserSingleton = IWebBrowserModule::Get().GetSingleton();
 
-			// TODO: We can't make a custom name because GenerateWebCacheFolderName is ran on the CookieStorageLocation
-			// The cache directory must always live under the Saved/webcache_<CHROME_VERSION_BUILD>
-			const FString DirectoryName = FString::Printf(TEXT("webcache_4430/immutable_%d"), GetWorldUserIndex());
-			const FString RelativeCachePath(FPaths::Combine(WebBrowserSingleton->ApplicationCacheDir(), DirectoryName));
-			BrowserContextSettings.CookieStorageLocation = FPaths::ConvertRelativePathToFull(RelativeCachePath);
-			IMTBL_LOG("CookieStorageLocation: %s", *BrowserContextSettings.CookieStorageLocation);
-		}
+		// TODO: We can't make a custom name because GenerateWebCacheFolderName is ran on the CookieStorageLocation
+		// The cache directory must always live under the Saved/webcache_<CHROME_VERSION_BUILD>
+		const FString DirectoryName = FString::Printf(TEXT("webcache_4430/immutable_%d"), GetWorldUserIndex());
+		const FString RelativeCachePath(FPaths::Combine(WebBrowserSingleton->ApplicationCacheDir(), DirectoryName));
+		BrowserContextSettings.CookieStorageLocation = FPaths::ConvertRelativePathToFull(RelativeCachePath);
+		IMTBL_LOG("CookieStorageLocation: %s", *BrowserContextSettings.CookieStorageLocation);
+#endif // WITH_EDITOR
 
 #if USING_BUNDLED_CEF
+
+#if WITH_EDITOR
 		WebBrowserWidget = SNew(SWebBrowserView).InitialURL(InitialURL).SupportsTransparency(bSupportsTransparency)
+#else
+		WebBrowserWidget = SNew(SWebBrowser).InitialURL(InitialURL).ShowControls(false).SupportsTransparency(bSupportsTransparency).ShowInitialThrobber(true)
+#endif // WITH_EDITOR
+
 #if PLATFORM_ANDROID | PLATFORM_IOS
             .OnLoadCompleted(
                 BIND_UOBJECT_DELEGATE(FSimpleDelegate, HandleOnLoadCompleted))
 #endif
-#if ENGINE_MAJOR_VERSION == 5 && ENGINE_MINOR_VERSION >= 1
 			.OnConsoleMessage(BIND_UOBJECT_DELEGATE(FOnConsoleMessageDelegate, HandleOnConsoleMessage))
+
+#if WITH_EDITOR
 			.ContextSettings(BrowserContextSettings)
-#endif
+#endif // WITH_EDITOR
 			;
 
 		return WebBrowserWidget.ToSharedRef();
+
 #else
     return SNew(SBox)
         .HAlign(HAlign_Center)
@@ -172,12 +180,12 @@ TSharedRef<SWidget> UImtblBrowserWidget::RebuildWidget()
                                    .Text(NSLOCTEXT("Immutable",
                                                    "Immutable Web Browser",
                                                    "Immutable Web Browser"))];
-#endif
+#endif // USING_BUNDLED_CEF
 	}
 }
 
 #if PLATFORM_ANDROID | PLATFORM_IOS
-void UImtblBrowserWidget::HandleOnLoadCompleted() 
+void UImtblBrowserWidget::HandleOnLoadCompleted()
 {
 	FString indexUrl = "file:///immutable/index.html";
 
@@ -190,9 +198,9 @@ void UImtblBrowserWidget::HandleOnLoadCompleted()
 	{
 		IMTBL_ERR("Immutable Browser Widget Url don't match: (loaded : %s, required: %s)", *WebBrowserWidget->GetUrl(), *indexUrl);
 	}
-#endif
+#endif // USING_BUNDLED_CEF
 }
-#endif
+#endif // PLATFORM_ANDROID | PLATFORM_IOS
 
 void UImtblBrowserWidget::OnWidgetRebuilt()
 {

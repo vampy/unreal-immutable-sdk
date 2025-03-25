@@ -37,8 +37,15 @@ private:
 	FOnConsoleMessage OnConsoleMessage;
 
 #if USING_BUNDLED_CEF
-	TSharedPtr<class SWebBrowserView> WebBrowserWidget;
-#endif
+
+#if WITH_EDITOR
+	TSharedPtr<SWebBrowserView> WebBrowserWidget;
+#else
+	TSharedPtr<SWebBrowser> WebBrowserWidget;
+#endif // WITH_EDITOR
+
+#endif // USING_BUNDLED_CEF
+
 	/** URL that the browser will initially navigate to. The URL should include
 	 * the protocol, eg http:// */
 	FString InitialURL;
