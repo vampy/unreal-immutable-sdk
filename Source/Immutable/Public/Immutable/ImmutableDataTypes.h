@@ -1,14 +1,18 @@
 #pragma once
 
-#include "JsonObjectConverter.h"
+#include "Misc/EngineVersion.h"
+
 #include "Immutable/ImtblJSMessages.h"
 #include "Immutable/ImmutableNames.h"
 
 #include "ImmutableDataTypes.generated.h"
 
+DECLARE_MULTICAST_DELEGATE_OneParam(FImmutableDeepLinkMulticastDelegate, const FString& /** DeepLink */);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FImmutableDeepLinkDynamicMulticastDelegate, const FString&, DeepLink);
+
 // This is the version of the Unreal Immutable SDK that is being used. This is not the version of the engine.
 // This hardcoded value will be updated by a workflow during the release process.
-#define ENGINE_SDK_VERSION TEXT("1.9.0")
+#define ENGINE_SDK_VERSION TEXT("1.11.0")
 
 USTRUCT()
 struct FImmutableEngineVersionData
@@ -41,7 +45,7 @@ struct FImmutableEngineVersionData
 /**
  * Structure to hold initialisation data for the Immutable Passport.
  */
-USTRUCT()
+USTRUCT(BlueprintType)
 struct IMMUTABLE_API FImmutablePassportInitData
 {
 	GENERATED_BODY()
@@ -88,36 +92,16 @@ struct IMMUTABLE_API FImmutablePassportInitData
 };
 
 USTRUCT()
-struct FImmutablePassportInitDeviceFlowData
-{
-	GENERATED_BODY()
-
-	UPROPERTY()
-	FString code;
-	
-	UPROPERTY()
-	FString deviceCode;
-	
-	UPROPERTY()
-	FString url;
-	
-	UPROPERTY()
-	float interval = 0;
-
-	static TOptional<FImmutablePassportInitDeviceFlowData> FromJsonString(const FString& JsonObjectString);
-};
-
-USTRUCT()
 struct FImtblUserProfile
 {
 	GENERATED_BODY()
-	
+
 	UPROPERTY()
 	FString email;
-	
+
 	UPROPERTY()
 	FString nickname;
-	
+
 	UPROPERTY()
 	FString sub;
 };
@@ -149,23 +133,10 @@ struct IMMUTABLE_API FImmutablePassportZkEvmGetBalanceData
 	FString ToJsonString() const;
 };
 
-USTRUCT()
-struct FImmutablePassportCodeConfirmRequestData
-{
-	GENERATED_BODY()
 
-	UPROPERTY()
-	FString deviceCode;
-	
-	UPROPERTY()
-	float interval = 5;
-
-	UPROPERTY()
-	float timeoutMs = 15 * 60 * 1000;
-};
 
 USTRUCT()
-struct FImmutablePassportConnectPKCEData
+struct FImmutablePassportConnectData
 {
 	GENERATED_BODY()
 
@@ -220,85 +191,134 @@ struct FNftTransferDetails
 	FString tokenAddress;
 };
 
-
-USTRUCT(BlueprintType, meta = (HasNativeBreak = "/Script/Immutable.ImmutableBlueprintLibrary.BreakFZkEvmTransactionReceiptLog"))
+USTRUCT(BlueprintType)
 struct IMMUTABLE_API FZkEvmTransactionReceiptLog
 {
 	GENERATED_BODY()
 
-	UPROPERTY()
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	FString _type;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	FString address;
 
-	UPROPERTY()
-	TArray<FString> topics;
-
-	UPROPERTY()
-	FString data;
-
-	UPROPERTY()
-	FString blockNumber;
-
-	UPROPERTY()
-	FString transactionHash;
-
-	UPROPERTY()
-	FString transactionIndex;
-
-	UPROPERTY()
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	FString blockHash;
 
-	UPROPERTY()
-	FString logIndex;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	FString blockNumber;
 
-	UPROPERTY()
-	bool removed = false;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	FString data;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	FString index;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	TArray<FString> topics;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	FString transactionHash;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	FString transactionIndex;
 };
 
-USTRUCT(BlueprintType, meta = (HasNativeBreak = "/Script/Immutable.ImmutableBlueprintLibrary.BreakZkEvmTransactionReceipt"))
+USTRUCT(BlueprintType)
 struct IMMUTABLE_API FZkEvmTransactionReceipt
 {
 	GENERATED_BODY()
 
-	UPROPERTY()
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	FString responseFor;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	FString requestId;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	bool success;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	FString blockHash;
 
-	UPROPERTY()
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	FString blockNumber;
 
-	UPROPERTY()
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	FString contractAddress;
 
-	UPROPERTY()
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	FString cumulativeGasUsed;
 
-	UPROPERTY()
-	FString effectiveGasPrice;
-
-	UPROPERTY()
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	FString from;
 
-	UPROPERTY()
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	FString gasPrice;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	FString blobGasUsed;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	FString blobGasPrice;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	FString gasUsed;
 
-	UPROPERTY(BlueprintReadOnly)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	FString hash;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	FString index;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	TArray<FZkEvmTransactionReceiptLog> logs;
 
-	UPROPERTY()
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	FString logsBloom;
 
 	// Either 1 (success) or 0 (failure) encoded as a hexadecimal.
-	UPROPERTY()
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	FString status;
 
-	UPROPERTY()
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	FString to;
+};
 
-	UPROPERTY()
-	FString transactionHash;
+/**
+ * Data for PKCE deep linking
+ */
+UCLASS(BlueprintType, DisplayName = "Immutable PKCE Data")
+class IMMUTABLE_API UImmutablePKCEData : public UObject
+{
+	GENERATED_BODY()
 
-	UPROPERTY()
-	FString transactionIndex;
+public:
+	/** UObject: @Interface @Begin */
+	virtual void BeginDestroy() override;
+	/** UObject: @Interface @End */
 
-	UPROPERTY()
-	FString type;
+	/**
+	 * Reset and clean up PKCE operation footprint
+	 * Automatically called during object destruction
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Immutable|Passport")
+	void Reset();
+
+public:
+	/** Passport initialization data */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	FImmutablePassportInitData PassportInitData;
+
+	/** 
+	 * Delegate triggered when a deep link callback is received from the browser
+	 * Contains the complete URI with authorization code and state parameters
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, BlueprintAssignable, DisplayName = "Deep Link Callback")
+	FImmutableDeepLinkDynamicMulticastDelegate DynamicMulticastDelegate_DeepLinkCallback;
+
+	/** 
+	 * Handle for the ticker delegate that periodically checks for incoming deep links
+	 */
+	FTSTicker::FDelegateHandle TickDelegateHandle;
 };

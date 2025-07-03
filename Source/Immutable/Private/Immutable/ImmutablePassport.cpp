@@ -23,6 +23,9 @@
 #include "GenericPlatform/GenericPlatformProcess.h"
 #include "Mac/ImmutableMac.h"
 #endif
+#if PLATFORM_WINDOWS
+#include "Immutable/Windows/ImmutablePKCEWindows.h"
+#endif
 
 #define PASSPORT_SAVE_GAME_SLOT_NAME TEXT("Immutable")
 
@@ -48,15 +51,15 @@ void UImmutablePassport::Initialize(const FImtblPassportResponseDelegate& Respon
 {
 	check(JSConnector.IsValid());
 
-	auto Settings = GetDefault<UImmutableSettings>();
+	const UImmutableSettings* Settings = GetDefault<UImmutableSettings>();
 
-	if (Settings)
+	if (!Settings)
 	{
 		ResponseDelegate.ExecuteIfBound(FImmutablePassportResult{false, "Failed to find Immutable Settings"});
-		
+
 		return;
 	}
-	
+
 	UApplicationConfig* ApplicationConfig = Settings->DefaultApplicationConfig.GetDefaultObject();
 
 	if (!ApplicationConfig)
@@ -83,41 +86,45 @@ void UImmutablePassport::Initialize(const FImtblPassportResponseDelegate& Respon
 	CallJS(ImmutablePassportAction::INIT, InitData.ToJsonString(), ResponseDelegate, FImtblJSResponseDelegate::CreateUObject(this, &UImmutablePassport::OnInitializeResponse), false);
 }
 
-void UImmutablePassport::Connect(bool IsConnectImx, bool TryToRelogin, const FImtblPassportResponseDelegate& ResponseDelegate)
-{
-	SetStateFlags(IPS_CONNECTING);
-	if (IsConnectImx)
-	{
-		SetStateFlags(IPS_IMX);
-	}
-	if (TryToRelogin)
-	{
-		CallJS(IsConnectImx ? ImmutablePassportAction::RECONNECT : ImmutablePassportAction::RELOGIN, TEXT(""), ResponseDelegate, FImtblJSResponseDelegate::CreateUObject(this, &UImmutablePassport::ReinstateConnection));
-	}
-	else
-	{
-		Analytics->Track(IsConnectImx ? UImmutableAnalytics::EEventName::START_CONNECT_IMX : UImmutableAnalytics::EEventName::START_LOGIN);
-		CallJS(ImmutablePassportAction::INIT_DEVICE_FLOW, TEXT(""), ResponseDelegate, FImtblJSResponseDelegate::CreateUObject(this, &UImmutablePassport::OnInitDeviceFlowResponse));
-	}
-}
-
-#if PLATFORM_ANDROID | PLATFORM_IOS | PLATFORM_MAC
-void UImmutablePassport::ConnectPKCE(bool IsConnectImx, const FImtblPassportResponseDelegate& ResponseDelegate)
+#if PLATFORM_ANDROID | PLATFORM_IOS | PLATFORM_MAC | PLATFORM_WINDOWS
+void UImmutablePassport::Connect(bool IsConnectImx, const FImtblPassportResponseDelegate& ResponseDelegate)
 {
 	SetStateFlags(IPS_CONNECTING | IPS_PKCE);
+
+#if PLATFORM_WINDOWS
+	// Verify PKCEData is null before initializing to ensure we're not overriding an active PKCE operation.
+	// A non-null value indicates another PKCE operation is already in progress.
+	ensureAlways(!PKCEData);
+	PKCEData = UImmutablePKCEWindows::Initialise(InitData);
+	if (PKCEData)
+	{
+		PKCEData->DynamicMulticastDelegate_DeepLinkCallback.AddDynamic(this, &ThisClass::OnDeepLinkActivated);
+	}
+#endif
+
 	if (IsConnectImx)
 	{
 		SetStateFlags(IPS_IMX);
 	}
 	PKCEResponseDelegate = ResponseDelegate;
 	Analytics->Track(IsConnectImx ? UImmutableAnalytics::EEventName::START_CONNECT_IMX_PKCE : UImmutableAnalytics::EEventName::START_LOGIN_PKCE);
-	CallJS(ImmutablePassportAction::GetPKCEAuthUrl, TEXT(""), PKCEResponseDelegate, FImtblJSResponseDelegate::CreateUObject(this, &UImmutablePassport::OnGetPKCEAuthUrlResponse));
+	CallJS(ImmutablePassportAction::GetPKCEAuthUrl, TEXT(""), PKCEResponseDelegate, FImtblJSResponseDelegate::CreateUObject(this, &UImmutablePassport::OnGetAuthUrlResponse));
 }
 #endif
 
 void UImmutablePassport::Logout(bool DoHardLogout, const FImtblPassportResponseDelegate& ResponseDelegate)
 {
-#if PLATFORM_ANDROID | PLATFORM_IOS | PLATFORM_MAC
+#if PLATFORM_WINDOWS
+	// Verify PKCEData is null before initializing to ensure we're not overriding an active PKCE operation.
+	// A non-null value indicates another PKCE operation is already in progress.
+	ensureAlways(!PKCEData);
+	PKCEData = UImmutablePKCEWindows::Initialise(InitData);
+	if (PKCEData)
+	{
+		PKCEData->DynamicMulticastDelegate_DeepLinkCallback.AddDynamic(this, &ThisClass::OnDeepLinkActivated);
+	}
+#endif
+#if PLATFORM_ANDROID | PLATFORM_IOS | PLATFORM_MAC | PLATFORM_WINDOWS
 	if (IsStateFlagsSet(IPS_PKCE))
 	{
 		PKCELogoutResponseDelegate = ResponseDelegate;
@@ -173,13 +180,7 @@ void UImmutablePassport::ZkEvmSignTypedDataV4(const FString& RequestJsonString, 
 	CallJS(ImmutablePassportAction::ZkEvmSignTypedDataV4, RequestJsonString, ResponseDelegate, FImtblJSResponseDelegate::CreateUObject(this, &UImmutablePassport::OnBridgeCallbackResponse));
 }
 
-void UImmutablePassport::ConfirmCode(const FString& DeviceCode, const float Interval, const FImtblPassportResponseDelegate& ResponseDelegate)
-{
-	FImmutablePassportCodeConfirmRequestData Data{DeviceCode, Interval};
-	FString Action = IsStateFlagsSet(IPS_IMX) ? ImmutablePassportAction::CONNECT_CONFIRM_CODE : ImmutablePassportAction::LOGIN_CONFIRM_CODE;
 
-	CallJS(Action, UStructToJsonString(Data), ResponseDelegate, FImtblJSResponseDelegate::CreateUObject(this, &UImmutablePassport::OnConfirmCodeResponse));
-}
 
 void UImmutablePassport::GetIdToken(const FImtblPassportResponseDelegate& ResponseDelegate)
 {
@@ -322,40 +323,7 @@ void UImmutablePassport::Setup(const TWeakObjectPtr<UImtblJSConnector> Connector
 	Analytics->Setup(Connector);
 }
 
-void UImmutablePassport::ReinstateConnection(FImtblJSResponse Response)
-{
-	ResetStateFlags(IPS_CONNECTING);
 
-	if (auto ResponseDelegate = GetResponseDelegate(Response))
-	{
-		// currently, this response has to be called only for RELOGIN AND RECONNECT bridge routines
-		bool IsRelogin = Response.responseFor.Compare(ImmutablePassportAction::RELOGIN, ESearchCase::IgnoreCase) == 0;
-		const FString CallbackName = IsRelogin ? "Relogin" : "Reconnect";
-		UImmutableAnalytics::EEventName EventName = IsRelogin ? UImmutableAnalytics::EEventName::COMPLETE_RELOGIN : UImmutableAnalytics::EEventName::COMPLETE_RECONNECT;
-
-		if (Response.success)
-		{
-			SetStateFlags(IPS_CONNECTED);
-			ResponseDelegate->ExecuteIfBound(FImmutablePassportResult{true, "", Response});
-			Analytics->Track(EventName, true);
-		}
-		else
-		{
-			Analytics->Track(EventName, false);
-#if PLATFORM_ANDROID | PLATFORM_IOS | PLATFORM_MAC
-			if (IsStateFlagsSet(IPS_PKCE))
-			{
-				PKCEResponseDelegate = ResponseDelegate.GetValue();
-				CallJS(ImmutablePassportAction::GetPKCEAuthUrl, TEXT(""), PKCEResponseDelegate, FImtblJSResponseDelegate::CreateUObject(this, &UImmutablePassport::OnGetPKCEAuthUrlResponse));
-			}
-			else
-#endif
-			{
-				CallJS(ImmutablePassportAction::INIT_DEVICE_FLOW, TEXT(""), ResponseDelegate.GetValue(), FImtblJSResponseDelegate::CreateUObject(this, &UImmutablePassport::OnInitDeviceFlowResponse));
-			}
-		}
-	}
-}
 
 bool UImmutablePassport::CheckIsInitialized(const FString& Action, const FImtblPassportResponseDelegate& ResponseDelegate) const
 {
@@ -392,7 +360,7 @@ TOptional<UImmutablePassport::FImtblPassportResponseDelegate> UImmutablePassport
 
 void UImmutablePassport::OnInitializeResponse(FImtblJSResponse Response)
 {
-	if (auto ResponseDelegate = GetResponseDelegate(Response))
+	if (TOptional<FImtblPassportResponseDelegate> ResponseDelegate = GetResponseDelegate(Response))
 	{
 		FString Error;
 		
@@ -411,36 +379,7 @@ void UImmutablePassport::OnInitializeResponse(FImtblJSResponse Response)
 	}
 }
 
-void UImmutablePassport::OnInitDeviceFlowResponse(FImtblJSResponse Response)
-{
-	if (auto ResponseDelegate = GetResponseDelegate(Response))
-	{
-		const auto InitDeviceFlowData = JsonObjectToUStruct<FImmutablePassportInitDeviceFlowData>(Response.JsonObject);
 
-		if (!Response.success || !InitDeviceFlowData || !InitDeviceFlowData->code.Len())
-		{
-			FString Msg;
-
-			IMTBL_WARN("Login device flow initialization attempt failed.");
-			Response.Error.IsSet() ? Msg = Response.Error->ToString() : Msg = Response.JsonObject->GetStringField(TEXT("error"));
-			ResponseDelegate->ExecuteIfBound(FImmutablePassportResult{false, Msg, Response});
-
-			return;
-		}
-		FString Err;
-
-		FPlatformProcess::LaunchURL(*InitDeviceFlowData->url, nullptr, &Err);
-		if (Err.Len())
-		{
-			FString Msg = "Failed to connect to Browser: " + Err;
-
-			IMTBL_ERR("%s", *Msg);
-			ResponseDelegate->ExecuteIfBound(FImmutablePassportResult{false, Msg, Response});
-			return;
-		}
-		ConfirmCode(InitDeviceFlowData->deviceCode, InitDeviceFlowData->interval, ResponseDelegate.GetValue());
-	}
-}
 
 void UImmutablePassport::OnLogoutResponse(FImtblJSResponse Response)
 {
@@ -470,44 +409,41 @@ void UImmutablePassport::OnLogoutResponse(FImtblJSResponse Response)
 		
 		return;
 	}
-	
-	FString Url;
-	FString ErrorMessage;
+
+	auto Logout = [this](const FImtblJSResponse& Response)
+	{
+		TOptional<FImtblPassportResponseDelegate> ResponseDelegate = GetResponseDelegate(Response);
+
+		FString Url;
+		Response.JsonObject->TryGetStringField(TEXT("result"), Url);
+
+		FString ErrorMessage;
+		FPlatformProcess::LaunchURL(*Url, nullptr, &ErrorMessage);
+
+		if (ErrorMessage.Len())
+		{
+			ErrorMessage = "Failed to launch browser: " + ErrorMessage;
+			IMTBL_ERR("%s", *ErrorMessage);
+			ResponseDelegate->ExecuteIfBound(FImmutablePassportResult{false, ErrorMessage, Response});
+		}
+	};
 
 	ResetStateFlags(IPS_HARDLOGOUT);
+
+	FString Url;
 	Response.JsonObject->TryGetStringField(TEXT("result"), Url);
+
 	if (!Url.IsEmpty())
 	{
-#if PLATFORM_ANDROID | PLATFORM_IOS | PLATFORM_MAC
-		if (IsStateFlagsSet(IPS_PKCE))
-		{
-			OnHandleDeepLink = FImtblPassportHandleDeepLinkDelegate::CreateUObject(this, &UImmutablePassport::OnDeepLinkActivated);
+		OnHandleDeepLink.AddUObject(this, &UImmutablePassport::OnDeepLinkActivated);
 #if PLATFORM_ANDROID
-			LaunchAndroidUrl(Url);
+		LaunchAndroidUrl(Url);
 #elif PLATFORM_IOS
-			[[ImmutableIOS instance] launchUrl:TCHAR_TO_ANSI(*Url)];
+		[[ImmutableIOS instance] launchUrl:TCHAR_TO_ANSI(*Url)];
 #elif PLATFORM_MAC
-			[[ImmutableMac instance] launchUrl:TCHAR_TO_ANSI(*Url) forRedirectUri:TCHAR_TO_ANSI(*InitData.logoutRedirectUri)];
-#endif
-		}
-		else
-		{
-#endif
-			FPlatformProcess::LaunchURL(*Url, nullptr, &ErrorMessage);
-			if (ErrorMessage.Len())
-			{
-				Message = "Failed to connect to Browser: " + ErrorMessage;
-				
-				IMTBL_ERR("%s", *Message);
-				ResponseDelegate->ExecuteIfBound(FImmutablePassportResult{ false, Message, Response });
-
-				return;
-			}
-			Analytics->Track(UImmutableAnalytics::EEventName::COMPLETE_LOGOUT);
-			IMTBL_LOG("Logged out")
-			ResponseDelegate->ExecuteIfBound(FImmutablePassportResult{ Response.success });
-#if PLATFORM_ANDROID | PLATFORM_IOS | PLATFORM_MAC
-		}
+		[[ImmutableMac instance] launchUrl:TCHAR_TO_ANSI(*Url) forRedirectUri:TCHAR_TO_ANSI(*InitData.logoutRedirectUri)];
+#elif PLATFORM_WINDOWS
+		Logout(Response);
 #endif
 	}
 	else
@@ -517,8 +453,8 @@ void UImmutablePassport::OnLogoutResponse(FImtblJSResponse Response)
 	ResetStateFlags(IPS_CONNECTED);
 }
 
-#if PLATFORM_ANDROID | PLATFORM_IOS | PLATFORM_MAC
-void UImmutablePassport::OnGetPKCEAuthUrlResponse(FImtblJSResponse Response)
+#if PLATFORM_ANDROID | PLATFORM_IOS | PLATFORM_MAC | PLATFORM_WINDOWS
+void UImmutablePassport::OnGetAuthUrlResponse(FImtblJSResponse Response)
 {
 	if (PKCEResponseDelegate.IsBound())
 	{
@@ -532,16 +468,27 @@ void UImmutablePassport::OnGetPKCEAuthUrlResponse(FImtblJSResponse Response)
 		else
 		{
 			// Handle deeplink calls
-			OnHandleDeepLink = FImtblPassportHandleDeepLinkDelegate::CreateUObject(this, &UImmutablePassport::OnDeepLinkActivated);
+			OnHandleDeepLink.AddUObject(this, &UImmutablePassport::OnDeepLinkActivated);
 
 			Msg = Response.JsonObject->GetStringField(TEXT("result")).Replace(TEXT(" "), TEXT("+"));
 #if PLATFORM_ANDROID
-			OnPKCEDismissed = FImtblPassportOnPKCEDismissedDelegate::CreateUObject(this, &UImmutablePassport::HandleOnLoginPKCEDismissed);
+			OnPKCEDismissed = FImtblPassportOnPKCEDismissedDelegate::CreateUObject(this, &UImmutablePassport::HandleOnLoginDismissed);
 			LaunchAndroidUrl(Msg);
 #elif PLATFORM_IOS
 			[[ImmutableIOS instance] launchUrl:TCHAR_TO_ANSI(*Msg)];
 #elif PLATFORM_MAC
 			[[ImmutableMac instance] launchUrl:TCHAR_TO_ANSI(*Msg) forRedirectUri:TCHAR_TO_ANSI(*InitData.redirectUri)];
+#elif PLATFORM_WINDOWS
+			FString ErrorMessage;
+			FPlatformProcess::LaunchURL(*Msg, nullptr, &ErrorMessage);
+			if (!ErrorMessage.IsEmpty())
+			{
+				ErrorMessage = "Failed to launch browser: " + ErrorMessage;
+				IMTBL_ERR("%s", *ErrorMessage);
+				PKCEResponseDelegate.ExecuteIfBound(FImmutablePassportResult{false, ErrorMessage});
+				PKCEResponseDelegate.Unbind();
+				ResetStateFlags(IPS_PKCE | IPS_CONNECTING);
+			}
 #endif
 		}
 	}
@@ -551,7 +498,7 @@ void UImmutablePassport::OnGetPKCEAuthUrlResponse(FImtblJSResponse Response)
 	}
 }
 
-void UImmutablePassport::OnConnectPKCEResponse(FImtblJSResponse Response)
+void UImmutablePassport::OnConnectResponse(FImtblJSResponse Response)
 {
 	if (PKCEResponseDelegate.IsBound())
 	{
@@ -583,31 +530,8 @@ void UImmutablePassport::OnConnectPKCEResponse(FImtblJSResponse Response)
 	}
 	ResetStateFlags(IPS_COMPLETING_PKCE);
 }
-#endif
 
-void UImmutablePassport::OnConfirmCodeResponse(FImtblJSResponse Response)
-{
-	if (auto ResponseDelegate = GetResponseDelegate(Response))
-	{
-		FString Msg;
-		FString TypeOfConnection = IsStateFlagsSet(IPS_IMX) ? TEXT("connect") : TEXT("login");
-		UImmutableAnalytics::EEventName EventName = IsStateFlagsSet(IPS_IMX) ? UImmutableAnalytics::EEventName::COMPLETE_CONNECT_IMX : UImmutableAnalytics::EEventName::COMPLETE_LOGIN;
 
-		ResetStateFlags(IPS_CONNECTING);
-		if (Response.success)
-		{
-			IMTBL_LOG("Code confirmed for %s operation.", *TypeOfConnection)
-			SetStateFlags(IPS_CONNECTED);
-		}
-		else
-		{
-			IMTBL_LOG("%s code not confirmed.", *TypeOfConnection)
-			Response.Error.IsSet() ? Msg = Response.Error->ToString() : Msg = Response.JsonObject->GetStringField(TEXT("error"));
-		}
-		Analytics->Track(EventName, Response.success);
-		ResponseDelegate->ExecuteIfBound(FImmutablePassportResult{Response.success, Msg, Response});
-	}
-}
 
 void UImmutablePassport::OnBridgeCallbackResponse(FImtblJSResponse Response)
 {
@@ -666,11 +590,9 @@ void UImmutablePassport::LoadPassportSettings()
 	}
 }
 
-#if PLATFORM_ANDROID | PLATFORM_IOS | PLATFORM_MAC
-void UImmutablePassport::OnDeepLinkActivated(FString DeepLink)
+void UImmutablePassport::OnDeepLinkActivated(const FString& DeepLink)
 {
-	IMTBL_LOG_FUNC("URL : %s", *DeepLink);
-	OnHandleDeepLink = nullptr;
+	OnHandleDeepLink.Clear();
 	if (DeepLink.StartsWith(InitData.logoutRedirectUri))
 	{
 		// execute on game thread to prevent call to Passport instance from another thread
@@ -679,6 +601,7 @@ void UImmutablePassport::OnDeepLinkActivated(FString DeepLink)
 			FGraphEventRef GameThreadTask = FFunctionGraphTask::CreateAndDispatchWhenReady([this]()
 			{
 				Analytics->Track(UImmutableAnalytics::EEventName::COMPLETE_LOGOUT_PKCE);
+				IMTBL_LOG("Complete Logout PKCE")
 				PKCELogoutResponseDelegate.ExecuteIfBound(FImmutablePassportResult{true, "Logged out"});
 				PKCELogoutResponseDelegate = nullptr;
 				ResetStateFlags(IPS_CONNECTED | IPS_PKCE | IPS_IMX);
@@ -688,11 +611,13 @@ void UImmutablePassport::OnDeepLinkActivated(FString DeepLink)
 	}
 	else if (DeepLink.StartsWith(InitData.redirectUri))
 	{
-		CompleteLoginPKCEFlow(DeepLink);
+		CompleteLoginFlow(DeepLink);
 	}
+
+	PKCEData = nullptr;
 }
 
-void UImmutablePassport::CompleteLoginPKCEFlow(FString Url)
+void UImmutablePassport::CompleteLoginFlow(FString Url)
 {
 	// Required mainly for Android to detect when Chrome Custom tabs is dismissed
 	// See HandleOnLoginPKCEDismissed
@@ -733,38 +658,39 @@ void UImmutablePassport::CompleteLoginPKCEFlow(FString Url)
 	}
 	else
 	{
-		FImmutablePassportConnectPKCEData Data = FImmutablePassportConnectPKCEData{Code.GetValue(), State.GetValue()};
+		FImmutablePassportConnectData Data = FImmutablePassportConnectData{Code.GetValue(), State.GetValue()};
 
 		CallJS(IsStateFlagsSet(IPS_IMX) ? ImmutablePassportAction::CONNECT_PKCE : ImmutablePassportAction::LOGIN_PKCE, UStructToJsonString(Data), PKCEResponseDelegate,
-		       FImtblJSResponseDelegate::CreateUObject(this, &UImmutablePassport::OnConnectPKCEResponse));
+		       FImtblJSResponseDelegate::CreateUObject(this, &UImmutablePassport::OnConnectResponse));
 	}
 }
-
 #endif
 
-#if PLATFORM_ANDROID | PLATFORM_IOS | PLATFORM_MAC
-#if PLATFORM_ANDROID
+#if PLATFORM_ANDROID | PLATFORM_WINDOWS
 // Called from Android JNI
 void UImmutablePassport::HandleDeepLink(FString DeepLink) const
-{
-#elif PLATFORM_IOS | PLATFORM_MAC
-
+#endif
+#if PLATFORM_IOS | PLATFORM_MAC
 // Called from iOS Objective C
 void UImmutablePassport::HandleDeepLink(NSString* sDeepLink) const
+#endif
 {
+#if PLATFORM_IOS | PLATFORM_MAC
 	FString DeepLink = FString(UTF8_TO_TCHAR([sDeepLink UTF8String]));
 	IMTBL_LOG("Handle Deep Link: %s", *DeepLink);
 #endif
-
-	if (!OnHandleDeepLink.ExecuteIfBound(DeepLink))
+#if PLATFORM_WINDOWS
+	if (PKCEData)
 	{
-		IMTBL_WARN("OnHandleDeepLink delegate was not called");
+		UImmutablePKCEWindows::HandleDeepLink(PKCEData, DeepLink);
 	}
-}
 #endif
 
+	OnHandleDeepLink.Broadcast(DeepLink);
+}
+
 #if PLATFORM_ANDROID
-void UImmutablePassport::HandleOnLoginPKCEDismissed()
+void UImmutablePassport::HandleOnLoginDismissed()
 {
 	IMTBL_LOG("Handle On Login PKCE Dismissed");
 	OnPKCEDismissed = nullptr;

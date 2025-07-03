@@ -1,7 +1,9 @@
 #include "ImmutableMac.h"
+
+#include "Engine/GameEngine.h"
+
 #include "Immutable/ImmutablePassport.h"
 #include "Immutable/ImmutableSubsystem.h"
-#include "Engine/GameEngine.h"
 
 #if WITH_EDITOR
 #include "Editor.h"
@@ -26,17 +28,24 @@ ASWebAuthenticationSession *_authSession;
 }
 
 + (UImmutablePassport*) getPassport {
-    UWorld* World = nullptr;
-
 #if WITH_EDITOR
 	if (GEditor)
 	{
 		for (const auto& Context : GEditor->GetWorldContexts())
 		{
-			if (Context.WorldType == EWorldType::PIE && Context.World())
+			if (auto* World = Context.World())
 			{
-				World = Context.World();
-				break;
+				if (auto GameInstance = World->GetGameInstance())
+				{
+					if (auto ImmutableSubsystem = GameInstance->GetSubsystem<UImmutableSubsystem>())
+					{
+						auto WeakPassport = ImmutableSubsystem->GetPassport();
+						if (auto Passport = WeakPassport.Get())
+						{
+							return Passport;
+						}
+					}
+				}
 			}
 		}
 	}
@@ -47,26 +56,17 @@ ASWebAuthenticationSession *_authSession;
 	}
 #endif
 
-	if (!World) {
-		return nil;
-	}
-
-	auto ImmutableSubsystem = World->GetGameInstance()->GetSubsystem<UImmutableSubsystem>();
-
-	if (!ImmutableSubsystem) {
-		return nil;
-	}
-
-	auto Passport = ImmutableSubsystem->GetPassport();
-
-	if (!Passport.IsValid()) {
-		return nil;
-	}
-
-	return Passport.Get();
+	return nil;
 }
 
 - (void)launchUrl:(const char *)url forRedirectUri:(const char *)redirectUri {
+  // For automation, use the browser-based method
+  if (GIsAutomationTesting) {
+    NSLog(@"Using automation mode for authentication (GIsAutomationTesting is true)");
+    [self launchUrlInBrowser:url];
+    return;
+  }
+
   if (@available(macOS 10.15, *)) {
     NSURL *URL =
         [NSURL URLWithString:[[NSString alloc] initWithUTF8String:url]];
@@ -102,6 +102,20 @@ ASWebAuthenticationSession *_authSession;
     _authSession.presentationContextProvider = self;
     [_authSession start];
   }
+}
+
+- (void)launchUrlInBrowser:(const char *)url {
+    // Add redundant check to ensure this only runs for automated testing
+    if (!GIsAutomationTesting) {
+        return;
+    }
+
+    // Create URL object
+    NSURL *URL = [NSURL URLWithString:[[NSString alloc] initWithUTF8String:url]];
+    
+    // Open URL in default browser
+    [[NSWorkspace sharedWorkspace] openURL:URL];
+    NSLog(@"Opened URL in browser for automation: %@", URL);
 }
 
 - (ASPresentationAnchor)presentationAnchorForWebAuthenticationSession:
