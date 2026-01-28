@@ -2,6 +2,8 @@
 
 #include "Immutable/ImmutableDataTypes.h"
 
+#include "Immutable/Actions/ImtblConnectImxAsyncAction.h"
+
 #if PLATFORM_WINDOWS
 #include "Immutable/Windows/ImmutablePKCEWindows.h"
 #endif
@@ -28,8 +30,6 @@ FString FImmutablePassportInitData::ToJsonString() const
 
 	return OutString;
 }
-
-
 
 FString FImmutablePassportZkEvmRequestAccountsData::ToJsonString() const
 {
@@ -85,6 +85,13 @@ FString FImmutablePassportZkEvmGetBalanceData::ToJsonString() const
 	return OutString;
 }
 
+FString FImmutablePassportResult::ToJsonString() const
+{
+	FString Result;
+	FJsonObjectConverter::UStructToJsonObjectString<FImmutablePassportResult>(*this, Result);
+	return Result;
+}
+
 void UImmutablePKCEData::BeginDestroy()
 {
 	Reset();
@@ -97,4 +104,29 @@ void UImmutablePKCEData::Reset()
 #if PLATFORM_WINDOWS
 	UImmutablePKCEWindows::Reset(this);
 #endif
+}
+
+bool FImmutableDirectLoginOptions::IsEmailValid() const
+{
+	return DirectLoginMethod == EImmutableDirectLoginMethod::Email && !Email.IsEmpty();
+}
+
+TSharedPtr<FJsonObject> FImmutableDirectLoginOptions::ToJsonObject() const
+{
+	TSharedPtr<FJsonObject> JsonObject = MakeShareable(new FJsonObject);
+	JsonObject->SetStringField(TEXT("directLoginMethod"), StaticEnum<EImmutableDirectLoginMethod>()->GetNameStringByValue(static_cast<int64>(DirectLoginMethod)).ToLower());
+
+	if (IsEmailValid())
+	{
+		JsonObject->SetStringField(TEXT("email"), Email);
+	}
+
+	JsonObject->SetStringField(TEXT("marketingConsentStatus"), StaticEnum<EImmutableMarketingConsentStatus>()->GetNameStringByValue(static_cast<int64>(MarketingConsentStatus)).ToLower());
+
+	return JsonObject;
+}
+
+bool UImmutableDirectLoginOptionsStatics::FromJSResponse(const FImtblJSResponse& Response, FImmutableDirectLoginOptions& DirectLoginOptions)
+{
+	return FJsonObjectConverter::JsonObjectToUStruct(Response.JsonObject.ToSharedRef(), &DirectLoginOptions);
 }

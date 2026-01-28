@@ -7,24 +7,26 @@
 #include "Immutable/Misc/ImtblLogging.h"
 
 
-UImtblConnectionAsyncActions* UImtblConnectionAsyncActions::Login(UObject* WorldContextObject)
+UImtblConnectionAsyncActions* UImtblConnectionAsyncActions::Login(UObject* WorldContextObject, const FImmutableDirectLoginOptions& DirectLoginOptions)
 {
 	UImtblConnectionAsyncActions* PassportInitBlueprintNode = NewObject<UImtblConnectionAsyncActions>();
 
 	PassportInitBlueprintNode->WorldContextObject = WorldContextObject;
 	PassportInitBlueprintNode->bIsConnectImx = false;
 	PassportInitBlueprintNode->bIsPKCE = true;
+	PassportInitBlueprintNode->DirectLoginOptions = DirectLoginOptions;
 
 	return PassportInitBlueprintNode;
 }
 
-UImtblConnectionAsyncActions* UImtblConnectionAsyncActions::ConnectImx(UObject* WorldContextObject)
+UImtblConnectionAsyncActions* UImtblConnectionAsyncActions::ConnectImx(UObject* WorldContextObject, const FImmutableDirectLoginOptions& DirectLoginOptions)
 {
 	UImtblConnectionAsyncActions* PassportInitBlueprintNode = NewObject<UImtblConnectionAsyncActions>();
 
 	PassportInitBlueprintNode->WorldContextObject = WorldContextObject;
 	PassportInitBlueprintNode->bIsConnectImx = true;
 	PassportInitBlueprintNode->bIsPKCE = true;
+	PassportInitBlueprintNode->DirectLoginOptions = DirectLoginOptions;
 
 	return PassportInitBlueprintNode;
 }
@@ -35,12 +37,22 @@ void UImtblConnectionAsyncActions::Activate()
 	{
 		FString Error = "Connect failed due to missing world or world context object.";
 		IMTBL_WARN("%s", *Error)
-		Failed.Broadcast(Error);
+		Internal_DynamicMulticastDelegate_OnFailed.Broadcast(Error);
 
 		return;
 	}
 
 	GetSubsystem()->WhenReady(this, &UImtblConnectionAsyncActions::DoConnect);
+}
+
+UImtblConnectionAsyncActions::FPassportConnectOutputPin* UImtblConnectionAsyncActions::DynamicMulticastDelegate_OnSuccess()
+{
+	return &Internal_DynamicMulticastDelegate_OnSuccess;
+}
+
+UImtblConnectionAsyncActions::FPassportConnectOutputPin* UImtblConnectionAsyncActions::DynamicMulticastDelegate_OnFailed()
+{
+	return &Internal_DynamicMulticastDelegate_OnFailed;
 }
 
 void UImtblConnectionAsyncActions::DoConnect(TWeakObjectPtr<UImtblJSConnector> JSConnector)
@@ -52,7 +64,7 @@ void UImtblConnectionAsyncActions::DoConnect(TWeakObjectPtr<UImtblJSConnector> J
 		if (bIsPKCE)
 		{
 #if PLATFORM_ANDROID | PLATFORM_IOS | PLATFORM_MAC | PLATFORM_WINDOWS
-			Passport->Connect(bIsConnectImx, UImmutablePassport::FImtblPassportResponseDelegate::CreateUObject(this, &UImtblConnectionAsyncActions::OnConnect));
+			Passport->Connect(bIsConnectImx, UImmutablePassport::FImtblPassportResponseDelegate::CreateUObject(this, &UImtblConnectionAsyncActions::OnConnect), DirectLoginOptions);
 #endif
 		}
 	}
@@ -66,10 +78,10 @@ void UImtblConnectionAsyncActions::OnConnect(FImmutablePassportResult Result)
 {
 	if (Result.Success)
 	{
-		Success.Broadcast(TEXT(""));
+		Internal_DynamicMulticastDelegate_OnSuccess.Broadcast(Result.ToJsonString());
 	}
 	else
 	{
-		Failed.Broadcast(Result.Error);
+		Internal_DynamicMulticastDelegate_OnFailed.Broadcast(Result.Error);
 	}
 }

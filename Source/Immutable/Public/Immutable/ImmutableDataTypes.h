@@ -7,12 +7,79 @@
 
 #include "ImmutableDataTypes.generated.h"
 
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FImmutableSimpleDynamicMulticastDelegate);
+
+DECLARE_MULTICAST_DELEGATE_OneParam(FImmutableMessageMulticastDelegate, const FString& /* Message */);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FImmutableMessageDynamicMulticastDelegate, const FString&, Message);
+
 DECLARE_MULTICAST_DELEGATE_OneParam(FImmutableDeepLinkMulticastDelegate, const FString& /** DeepLink */);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FImmutableDeepLinkDynamicMulticastDelegate, const FString&, DeepLink);
 
 // This is the version of the Unreal Immutable SDK that is being used. This is not the version of the engine.
 // This hardcoded value will be updated by a workflow during the release process.
-#define ENGINE_SDK_VERSION TEXT("1.11.0")
+#define ENGINE_SDK_VERSION TEXT("1.11.2")
+
+/**
+ * Enum representing marketing consent status for authentication
+ */
+UENUM(BlueprintType)
+enum class EImmutableMarketingConsentStatus : uint8
+{
+	Opted_In,
+	Unsubscribed,
+	Subscribed
+};
+
+/**
+ * Enum representing direct login methods for authentication providers
+ */
+UENUM(BlueprintType)
+enum class EImmutableDirectLoginMethod : uint8
+{
+	Email,
+	Google,
+	Apple,
+	Facebook
+};
+
+/**
+ * Structure representing direct login options for authentication
+ * Can be used for social login (google, apple, facebook) or email login
+ */
+USTRUCT(BlueprintType)
+struct IMMUTABLE_API FImmutableDirectLoginOptions
+{
+	GENERATED_BODY()
+
+	bool IsEmailValid() const;
+
+	TSharedPtr<FJsonObject> ToJsonObject() const;
+
+	/** Direct login method for authentication */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	EImmutableDirectLoginMethod DirectLoginMethod = EImmutableDirectLoginMethod::Email;
+
+	/** Email address for email-based authentication (only used when DirectLoginMethod is Email) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	FString Email;
+
+	/** Marketing consent status for authentication (defaults to opted in) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	EImmutableMarketingConsentStatus MarketingConsentStatus = EImmutableMarketingConsentStatus::Opted_In;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	FString ImPassportTraceId;
+};
+
+UCLASS()
+class UImmutableDirectLoginOptionsStatics : public UBlueprintFunctionLibrary
+{
+	GENERATED_BODY()
+
+public:
+	UFUNCTION(BlueprintCallable)
+	static bool FromJSResponse(const FImtblJSResponse& Response, FImmutableDirectLoginOptions& DirectLoginOptions);
+};
 
 USTRUCT()
 struct FImmutableEngineVersionData
@@ -37,7 +104,7 @@ struct FImmutableEngineVersionData
 	UPROPERTY()
 	FString platformVersion = FPlatformMisc::GetOSVersion().Replace(TEXT(" "), TEXT("_"));
 
-	// Information on device. Examples of expected results: Apple|Apple M3 Max, GenuineIntel|13th Gen Intel(R) Core(TM) i7-13700H, Apple|iPhone15&#44;4. 
+	// Information on device. Examples of expected results: Apple|Apple M3 Max, GenuineIntel|13th Gen Intel(R) Core(TM) i7-13700H, Apple|iPhone15&#44;4.
 	UPROPERTY()
 	FString deviceModel = FGenericPlatformMisc::GetDeviceMakeAndModel();
 };
@@ -71,7 +138,7 @@ struct IMMUTABLE_API FImmutablePassportInitData
 	UPROPERTY()
 	FString environment = ImmutablePassportEnvironmentConstants::EnvironmentSandbox;
 
-	/** 
+	/**
 	 * Whether silent logout is enabled.
 	 * If true, logout silently (without popping up a new browser tab)
 	 */
@@ -83,7 +150,7 @@ struct IMMUTABLE_API FImmutablePassportInitData
 	FImmutableEngineVersionData engineVersion;
 
 	/**
-	 * Converts the FImmutablePassportInitData structure to a JSON string representation. 
+	 * Converts the FImmutablePassportInitData structure to a JSON string representation.
 	 *
 	 * @return 	A JSON string representation of the FImmutablePassportInitData structure.
 	 * 			Returns an empty string if the conversion fails.
@@ -133,8 +200,6 @@ struct IMMUTABLE_API FImmutablePassportZkEvmGetBalanceData
 	FString ToJsonString() const;
 };
 
-
-
 USTRUCT()
 struct FImmutablePassportConnectData
 {
@@ -147,10 +212,29 @@ struct FImmutablePassportConnectData
 	FString state;
 };
 
+/**
+ * Structure to hold PKCE authentication URL request data
+ */
+USTRUCT()
+struct IMMUTABLE_API FImmutableGetPKCEAuthUrlRequest
+{
+	GENERATED_BODY()
+
+	/** Whether this is a ConnectImx operation (true) or just Login (false) */
+	UPROPERTY()
+	bool isConnectImx = false;
+
+	/** Direct login options for authentication */
+	UPROPERTY()
+	FImmutableDirectLoginOptions directLoginOptions;
+};
+
 USTRUCT()
 struct IMMUTABLE_API FImmutablePassportResult
 {
 	GENERATED_BODY()
+
+	FString ToJsonString() const;
 
 	/** Whether the response was successful. */
 	UPROPERTY()
@@ -161,6 +245,7 @@ struct IMMUTABLE_API FImmutablePassportResult
 	FString Error;
 
 	/** Response payload. */
+	UPROPERTY()
 	FImtblJSResponse Response;
 };
 
@@ -310,14 +395,14 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	FImmutablePassportInitData PassportInitData;
 
-	/** 
+	/**
 	 * Delegate triggered when a deep link callback is received from the browser
 	 * Contains the complete URI with authorization code and state parameters
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, BlueprintAssignable, DisplayName = "Deep Link Callback")
 	FImmutableDeepLinkDynamicMulticastDelegate DynamicMulticastDelegate_DeepLinkCallback;
 
-	/** 
+	/**
 	 * Handle for the ticker delegate that periodically checks for incoming deep links
 	 */
 	FTSTicker::FDelegateHandle TickDelegateHandle;

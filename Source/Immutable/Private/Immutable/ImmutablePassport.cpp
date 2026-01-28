@@ -87,14 +87,13 @@ void UImmutablePassport::Initialize(const FImtblPassportResponseDelegate& Respon
 }
 
 #if PLATFORM_ANDROID | PLATFORM_IOS | PLATFORM_MAC | PLATFORM_WINDOWS
-void UImmutablePassport::Connect(bool IsConnectImx, const FImtblPassportResponseDelegate& ResponseDelegate)
+void UImmutablePassport::Connect(bool IsConnectImx, const FImtblPassportResponseDelegate& ResponseDelegate, const FImmutableDirectLoginOptions& DirectLoginOptions)
 {
 	SetStateFlags(IPS_CONNECTING | IPS_PKCE);
 
 #if PLATFORM_WINDOWS
 	// Verify PKCEData is null before initializing to ensure we're not overriding an active PKCE operation.
 	// A non-null value indicates another PKCE operation is already in progress.
-	ensureAlways(!PKCEData);
 	PKCEData = UImmutablePKCEWindows::Initialise(InitData);
 	if (PKCEData)
 	{
@@ -108,7 +107,32 @@ void UImmutablePassport::Connect(bool IsConnectImx, const FImtblPassportResponse
 	}
 	PKCEResponseDelegate = ResponseDelegate;
 	Analytics->Track(IsConnectImx ? UImmutableAnalytics::EEventName::START_CONNECT_IMX_PKCE : UImmutableAnalytics::EEventName::START_LOGIN_PKCE);
-	CallJS(ImmutablePassportAction::GetPKCEAuthUrl, TEXT(""), PKCEResponseDelegate, FImtblJSResponseDelegate::CreateUObject(this, &UImmutablePassport::OnGetAuthUrlResponse));
+
+	TSharedPtr<FJsonObject> RequestObject = MakeShareable(new FJsonObject);
+	RequestObject->SetBoolField(TEXT("isConnectImx"), IsConnectImx);
+
+	TSharedPtr<FJsonObject> DirectLoginOptionsObject = DirectLoginOptions.ToJsonObject();
+	if (DirectLoginOptionsObject.IsValid())
+	{
+		RequestObject->SetObjectField(TEXT("directLoginOptions"), DirectLoginOptionsObject);
+	}
+
+	RequestObject->SetStringField(TEXT("imPassportTraceId"), DirectLoginOptions.ImPassportTraceId);
+
+	// Convert to JSON string
+	FString PKCERequestJson;
+	TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&PKCERequestJson);
+	if (!FJsonSerializer::Serialize(RequestObject.ToSharedRef(), Writer))
+	{
+		IMTBL_ERR("Failed to serialize PKCE request to JSON");
+		FImmutablePassportResult Result;
+		Result.Success = false;
+		Result.Error = TEXT("Failed to serialize authentication request");
+		ResponseDelegate.ExecuteIfBound(Result);
+		return;
+	}
+
+	CallJS(ImmutablePassportAction::GetPKCEAuthUrl, PKCERequestJson, PKCEResponseDelegate, FImtblJSResponseDelegate::CreateUObject(this, &UImmutablePassport::OnGetAuthUrlResponse));
 }
 #endif
 
@@ -516,7 +540,7 @@ void UImmutablePassport::OnConnectResponse(FImtblJSResponse Response)
 			Response.Error.IsSet() ? Msg = Response.Error->ToString() : Msg = Response.JsonObject->GetStringField(TEXT("error"));
 		}
 		Analytics->Track(IsStateFlagsSet(IPS_IMX) ? UImmutableAnalytics::EEventName::COMPLETE_CONNECT_IMX_PKCE : UImmutableAnalytics::EEventName::COMPLETE_LOGIN_PKCE, Response.success);
-		PKCEResponseDelegate.ExecuteIfBound(FImmutablePassportResult{Response.success, Msg});
+		PKCEResponseDelegate.ExecuteIfBound(FImmutablePassportResult{Response.success, Msg, Response});
 		PKCEResponseDelegate = nullptr;
 
 		// we save passport state for PKCE flow in case if we decide to close a game
