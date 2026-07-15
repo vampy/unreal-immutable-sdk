@@ -21,6 +21,17 @@ bool UImmutableBaseBrowserWidget::IsPageLoaded() const
 	return false;
 }
 
+FString UImmutableBaseBrowserWidget::GetUrl() const
+{
+#if USING_BUNDLED_CEF
+	if (WebBrowserWidget.IsValid())
+	{
+		return WebBrowserWidget->GetUrl();
+	}
+#endif
+	return FString();
+}
+
 void UImmutableBaseBrowserWidget::LoadURL(FString NewURL) const
 {
 #if USING_BUNDLED_CEF
@@ -46,9 +57,9 @@ FImmutableBrowserConsoleMessageDynamicMulticastDelegate* UImmutableBaseBrowserWi
 	return &Internal_DynamicMulticastDelegate_OnConsoleMessage;
 }
 
-FSimpleMulticastDelegate UImmutableBaseBrowserWidget::MulticastDelegate_OnLoadCompleted()
+FSimpleMulticastDelegate* UImmutableBaseBrowserWidget::MulticastDelegate_OnLoadCompleted()
 {
-	return Internal_MulticastDelegate_OnLoadCompleted;
+	return &Internal_MulticastDelegate_OnLoadCompleted;
 }
 
 FSimpleMulticastDelegate* UImmutableBaseBrowserWidget::MulticastDelegate_OnBrowserCreated()
