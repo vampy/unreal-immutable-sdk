@@ -9,13 +9,14 @@
 UImtblPassportConnectEvmAsyncAction* UImtblPassportConnectEvmAsyncAction::ConnectEvm(UObject* WorldContextObject)
 {
 	UImtblPassportConnectEvmAsyncAction* PassportInitBlueprintNode = NewObject<UImtblPassportConnectEvmAsyncAction>();
-	PassportInitBlueprintNode->WorldContextObject = WorldContextObject;
+	PassportInitBlueprintNode->RetainedWorldContextObject = WorldContextObject;
 	return PassportInitBlueprintNode;
 }
 
 void UImtblPassportConnectEvmAsyncAction::Activate()
 {
-	if (!WorldContextObject || !WorldContextObject->GetWorld())
+	UImmutableSubsystem* Subsystem = GetSubsystem();
+	if (!Subsystem)
 	{
 		FString Err = "ConnectEvm failed due to missing world or world context object.";
 		IMTBL_WARN("%s", *Err)
@@ -23,7 +24,7 @@ void UImtblPassportConnectEvmAsyncAction::Activate()
 		return;
 	}
 
-	GetSubsystem()->WhenReady(this, &UImtblPassportConnectEvmAsyncAction::DoConnectEvm);
+	Subsystem->WhenReady(this, &UImtblPassportConnectEvmAsyncAction::DoConnectEvm);
 }
 
 void UImtblPassportConnectEvmAsyncAction::DoConnectEvm(TWeakObjectPtr<UImtblJSConnector> JSConnector)

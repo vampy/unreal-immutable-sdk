@@ -10,14 +10,15 @@ UImtblPassportGetLinkedAddressesAsyncAction* UImtblPassportGetLinkedAddressesAsy
 {
 	UImtblPassportGetLinkedAddressesAsyncAction* Node = NewObject<UImtblPassportGetLinkedAddressesAsyncAction>();
 	
-	Node->WorldContextObject = WorldContextObject;
+	Node->RetainedWorldContextObject = WorldContextObject;
 	
 	return Node;
 }
 
 void UImtblPassportGetLinkedAddressesAsyncAction::Activate()
 {
-	if (!WorldContextObject || !WorldContextObject->GetWorld())
+	UImmutableSubsystem* Subsystem = GetSubsystem();
+	if (!Subsystem)
 	{
 		FString Err = "GetLinkedAddresses failed due to missing world or world context object.";
 		
@@ -27,7 +28,7 @@ void UImtblPassportGetLinkedAddressesAsyncAction::Activate()
 		return;
 	}
 
-	GetSubsystem()->WhenReady(this, &UImtblPassportGetLinkedAddressesAsyncAction::DoGetLinkedAddresses);
+	Subsystem->WhenReady(this, &UImtblPassportGetLinkedAddressesAsyncAction::DoGetLinkedAddresses);
 }
 
 void UImtblPassportGetLinkedAddressesAsyncAction::DoGetLinkedAddresses(TWeakObjectPtr<UImtblJSConnector> JSConnector)

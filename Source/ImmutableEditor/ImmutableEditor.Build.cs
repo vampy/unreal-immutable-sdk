@@ -7,6 +7,8 @@ public class ImmutableEditor : ModuleRules
     public ImmutableEditor(ReadOnlyTargetRules Target) : base(Target)
     {
         PCHUsage = ModuleRules.PCHUsageMode.UseExplicitOrSharedPCHs;
+		IWYUSupport = IWYUSupport.Full;
+		bUseUnity = true;
 
 #if UE_5_1_OR_LATER
 			IncludeOrderVersion = EngineIncludeOrderVersion.Latest;

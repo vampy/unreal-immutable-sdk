@@ -10,7 +10,7 @@ UImtblPassportLogoutAsyncAction* UImtblPassportLogoutAsyncAction::Logout(UObject
 {
 	UImtblPassportLogoutAsyncAction* PassportInitBlueprintNode = NewObject<UImtblPassportLogoutAsyncAction>();
 
-	PassportInitBlueprintNode->WorldContextObject = WorldContextObject;
+	PassportInitBlueprintNode->RetainedWorldContextObject = WorldContextObject;
 	PassportInitBlueprintNode->bDoHardLogout = DoHardLogout;
 
 	return PassportInitBlueprintNode;
@@ -18,7 +18,8 @@ UImtblPassportLogoutAsyncAction* UImtblPassportLogoutAsyncAction::Logout(UObject
 
 void UImtblPassportLogoutAsyncAction::Activate()
 {
-	if (!WorldContextObject || !WorldContextObject->GetWorld())
+	UImmutableSubsystem* Subsystem = GetSubsystem();
+	if (!Subsystem)
 	{
 		const FString ErrorMessage = "Logout failed due to missing world or world context object.";
 		
@@ -28,7 +29,7 @@ void UImtblPassportLogoutAsyncAction::Activate()
 		return;
 	}
 
-	GetSubsystem()->WhenReady(this, &UImtblPassportLogoutAsyncAction::DoLogout);
+	Subsystem->WhenReady(this, &UImtblPassportLogoutAsyncAction::DoLogout);
 }
 
 void UImtblPassportLogoutAsyncAction::DoLogout(TWeakObjectPtr<UImtblJSConnector> JSConnector)

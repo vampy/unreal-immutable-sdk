@@ -8,7 +8,7 @@ UImtblConnectionAsyncActions* UImtblConnectionAsyncActions::Login(UObject* World
 {
 	UImtblConnectionAsyncActions* Node = NewObject<UImtblConnectionAsyncActions>();
 
-	Node->WorldContextObject = WorldContextObject;
+	Node->RetainedWorldContextObject = WorldContextObject;
 	Node->DirectLoginOptions = DirectLoginOptions;
 
 	return Node;
@@ -16,7 +16,8 @@ UImtblConnectionAsyncActions* UImtblConnectionAsyncActions::Login(UObject* World
 
 void UImtblConnectionAsyncActions::Activate()
 {
-	if (!WorldContextObject || !WorldContextObject->GetWorld())
+	UImmutableSubsystem* Subsystem = GetSubsystem();
+	if (!Subsystem)
 	{
 		FString Error = "Connect failed due to missing world or world context object.";
 		IMTBL_WARN("%s", *Error)
@@ -25,7 +26,7 @@ void UImtblConnectionAsyncActions::Activate()
 		return;
 	}
 
-	GetSubsystem()->WhenReady(this, &UImtblConnectionAsyncActions::DoConnect);
+	Subsystem->WhenReady(this, &UImtblConnectionAsyncActions::DoConnect);
 }
 
 UImtblConnectionAsyncActions::FPassportConnectOutputPin* UImtblConnectionAsyncActions::DynamicMulticastDelegate_OnSuccess()

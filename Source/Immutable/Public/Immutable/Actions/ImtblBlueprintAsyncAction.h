@@ -2,10 +2,11 @@
 
 #pragma once
 
-#include "Immutable/ImmutableSubsystem.h"
 #include "Kismet/BlueprintAsyncActionBase.h"
 
 #include "ImtblBlueprintAsyncAction.generated.h"
+
+class UImmutableSubsystem;
 
 /**
  
@@ -17,7 +18,8 @@ class IMMUTABLE_API UImtblBlueprintAsyncAction : public UBlueprintAsyncActionBas
 	GENERATED_BODY()
 
 protected:
-	UObject* WorldContextObject;
+	UPROPERTY(Transient)
+	TObjectPtr<UObject> RetainedWorldContextObject = nullptr;
 
 	// Get subsystem
 	UImmutableSubsystem* GetSubsystem() const;

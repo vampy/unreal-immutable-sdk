@@ -16,6 +16,7 @@ public:
 
 	UFUNCTION(BlueprintPure)
 	UImtblJSConnector* GetJSConnector() const;
+	void LoadGameBridge();
 
 	/**
 	 * Execute JavaScript in the browser context

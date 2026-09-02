@@ -9,13 +9,14 @@
 UImtblPassportGetEmailAsyncAction* UImtblPassportGetEmailAsyncAction::GetEmail(UObject* WorldContextObject)
 {
 	UImtblPassportGetEmailAsyncAction* PassportInitBlueprintNode = NewObject<UImtblPassportGetEmailAsyncAction>();
-	PassportInitBlueprintNode->WorldContextObject = WorldContextObject;
+	PassportInitBlueprintNode->RetainedWorldContextObject = WorldContextObject;
 	return PassportInitBlueprintNode;
 }
 
 void UImtblPassportGetEmailAsyncAction::Activate()
 {
-	if (!WorldContextObject || !WorldContextObject->GetWorld())
+	UImmutableSubsystem* Subsystem = GetSubsystem();
+	if (!Subsystem)
 	{
 		FString Err = "GetEmail failed due to missing world or world context object.";
 		IMTBL_WARN("%s", *Err)
@@ -23,7 +24,7 @@ void UImtblPassportGetEmailAsyncAction::Activate()
 		return;
 	}
 
-	GetSubsystem()->WhenReady(this, &UImtblPassportGetEmailAsyncAction::DoGetEmail); //, /* timoutSec
+	Subsystem->WhenReady(this, &UImtblPassportGetEmailAsyncAction::DoGetEmail); //, /* timoutSec
 	//*/ 15.0f);
 }
 

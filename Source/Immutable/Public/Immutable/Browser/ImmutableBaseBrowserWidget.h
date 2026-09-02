@@ -8,6 +8,9 @@
 
 #include "ImmutableBaseBrowserWidget.generated.h"
 
+class SWebBrowser;
+class SWebBrowserView;
+
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_FourParams(FImmutableBrowserConsoleMessageDynamicMulticastDelegate, const FString&, Message, const FString&, Source, int32, Line, int32, Severity);
 
 /**
@@ -67,6 +70,7 @@ protected:
 	virtual void HandleConsoleMessage(const FString& Message, const FString& Source, int32 Line, int32 Severity);
 
 	virtual void OnBrowserCreated();
+	int32 GetWorldUserIndex() const;
 
 protected:
 	/** Called when console messages are logged */
@@ -78,7 +82,11 @@ protected:
 
 #if USING_BUNDLED_CEF
 	/** The underlying Slate web browser widget */
+#if WITH_EDITOR
+	TSharedPtr<SWebBrowserView> WebBrowserWidget;
+#else
 	TSharedPtr<SWebBrowser> WebBrowserWidget;
+#endif
 #endif
 
 	/** URL that the browser will initially navigate to */

@@ -9,13 +9,14 @@
 UImtblPassportZkEvmRequestAccountsAsyncAction* UImtblPassportZkEvmRequestAccountsAsyncAction::RequestAccounts(UObject* WorldContextObject)
 {
 	UImtblPassportZkEvmRequestAccountsAsyncAction* PassportInitBlueprintNode = NewObject<UImtblPassportZkEvmRequestAccountsAsyncAction>();
-	PassportInitBlueprintNode->WorldContextObject = WorldContextObject;
+	PassportInitBlueprintNode->RetainedWorldContextObject = WorldContextObject;
 	return PassportInitBlueprintNode;
 }
 
 void UImtblPassportZkEvmRequestAccountsAsyncAction::Activate()
 {
-	if (!WorldContextObject || !WorldContextObject->GetWorld())
+	UImmutableSubsystem* Subsystem = GetSubsystem();
+	if (!Subsystem)
 	{
 		FString Err = "ZkEvmRequestAccounts failed due to missing world or world " "context object.";
 		IMTBL_WARN("%s", *Err)
@@ -24,7 +25,7 @@ void UImtblPassportZkEvmRequestAccountsAsyncAction::Activate()
 		return;
 	}
 
-	GetSubsystem()->WhenReady(this, &UImtblPassportZkEvmRequestAccountsAsyncAction::DoRequestAccounts);
+	Subsystem->WhenReady(this, &UImtblPassportZkEvmRequestAccountsAsyncAction::DoRequestAccounts);
 }
 
 void UImtblPassportZkEvmRequestAccountsAsyncAction::DoRequestAccounts(TWeakObjectPtr<UImtblJSConnector> JSConnector)

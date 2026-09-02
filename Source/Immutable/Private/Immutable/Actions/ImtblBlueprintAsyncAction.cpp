@@ -5,11 +5,16 @@
 #include "Engine/GameInstance.h"
 #include "Engine/World.h"
 
+#include "Immutable/ImmutableSubsystem.h"
+
 UImmutableSubsystem* UImtblBlueprintAsyncAction::GetSubsystem() const
 {
-	if (!WorldContextObject || !WorldContextObject->GetWorld())
+	if (!IsValid(RetainedWorldContextObject))
 	{
 		return nullptr;
 	}
-	return WorldContextObject->GetWorld()->GetGameInstance()->GetSubsystem<UImmutableSubsystem>();
+
+	UWorld* World = RetainedWorldContextObject->GetWorld();
+	UGameInstance* GameInstance = World ? World->GetGameInstance() : nullptr;
+	return GameInstance ? GameInstance->GetSubsystem<UImmutableSubsystem>() : nullptr;
 }

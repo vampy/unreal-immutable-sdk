@@ -10,7 +10,7 @@ UImtblPassportZkEvmGetTransactionReceiptAA* UImtblPassportZkEvmGetTransactionRec
 {
 	UImtblPassportZkEvmGetTransactionReceiptAA* PassportZkEvmSendTransactionBlueprintNode = NewObject<UImtblPassportZkEvmGetTransactionReceiptAA>();
 	
-	PassportZkEvmSendTransactionBlueprintNode->WorldContextObject = WorldContextObject;
+	PassportZkEvmSendTransactionBlueprintNode->RetainedWorldContextObject = WorldContextObject;
 	PassportZkEvmSendTransactionBlueprintNode->Hash = Hash;
 	
 	return PassportZkEvmSendTransactionBlueprintNode;
@@ -18,7 +18,8 @@ UImtblPassportZkEvmGetTransactionReceiptAA* UImtblPassportZkEvmGetTransactionRec
 
 void UImtblPassportZkEvmGetTransactionReceiptAA::Activate()
 {
-	if (!WorldContextObject || !WorldContextObject->GetWorld())
+	UImmutableSubsystem* Subsystem = GetSubsystem();
+	if (!Subsystem)
 	{
 		const FString ErrorMessage = "zkEVM Transaction Receipt failed due to missing world context object.";
 		IMTBL_WARN("%s", *ErrorMessage)
@@ -26,7 +27,7 @@ void UImtblPassportZkEvmGetTransactionReceiptAA::Activate()
 		return;
 	}
 
-	GetSubsystem()->WhenReady(this, &UImtblPassportZkEvmGetTransactionReceiptAA::DoZkEvmGetTransactionReceipt);
+	Subsystem->WhenReady(this, &UImtblPassportZkEvmGetTransactionReceiptAA::DoZkEvmGetTransactionReceipt);
 }
 
 void UImtblPassportZkEvmGetTransactionReceiptAA::DoZkEvmGetTransactionReceipt(TWeakObjectPtr<UImtblJSConnector> JSConnector)

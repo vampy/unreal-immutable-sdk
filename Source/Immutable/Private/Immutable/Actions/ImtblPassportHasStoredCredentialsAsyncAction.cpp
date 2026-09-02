@@ -9,14 +9,15 @@ UImtblPassportHasStoredCredentialsAsyncAction* UImtblPassportHasStoredCredential
 {
 	UImtblPassportHasStoredCredentialsAsyncAction* PassportInitBlueprintNode = NewObject<UImtblPassportHasStoredCredentialsAsyncAction>();
 
-	PassportInitBlueprintNode->WorldContextObject = WorldContextObject;
+	PassportInitBlueprintNode->RetainedWorldContextObject = WorldContextObject;
 
 	return PassportInitBlueprintNode;
 }
 
 void UImtblPassportHasStoredCredentialsAsyncAction::Activate()
 {
-	if (!WorldContextObject || !WorldContextObject->GetWorld())
+	UImmutableSubsystem* Subsystem = GetSubsystem();
+	if (!Subsystem)
 	{
 		FString Err = "HasStoredCredentials failed due to missing world or world context object.";
 		IMTBL_WARN("%s", *Err)
@@ -24,7 +25,7 @@ void UImtblPassportHasStoredCredentialsAsyncAction::Activate()
 		return;
 	}
 
-	GetSubsystem()->WhenReady(this, &UImtblPassportHasStoredCredentialsAsyncAction::DoHasStoredCredentials);
+	Subsystem->WhenReady(this, &UImtblPassportHasStoredCredentialsAsyncAction::DoHasStoredCredentials);
 }
 
 void UImtblPassportHasStoredCredentialsAsyncAction::DoHasStoredCredentials(TWeakObjectPtr<UImtblJSConnector> JSConnector)

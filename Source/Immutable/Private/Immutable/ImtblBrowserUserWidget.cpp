@@ -10,7 +10,6 @@
 
 #include "Immutable/Browser/ImmutableJSConnectorBrowserWidget.h"
 #include "Immutable/ImtblJSConnector.h"
-#include "Immutable/ImmutableUtilities.h"
 #include "Immutable/Misc/ImtblLogging.h"
 
 TSharedRef<SWidget> UImtblBrowserUserWidget::RebuildWidget()
@@ -55,12 +54,7 @@ TSharedRef<SWidget> UImtblBrowserUserWidget::RebuildWidget()
 			});
 			W_Browser->MulticastDelegate_OnBrowserCreated()->AddWeakLambda(this, [this]()
 			{
-				FString JavaScript;
-				if (FImmutableUtilities::LoadGameBridge(JavaScript))
-				{
-					FString IndexHtml = FString("<!doctype html><html lang='en'><head><meta " "charset='utf-8'><title>GameSDK Bridge</title><script>") + JavaScript + FString("</script></head><body><h1>Bridge Running</h1></body></html>");
-					W_Browser->LoadString(IndexHtml, TEXT("file:///immutable/index.html"));
-				}
+				W_Browser->LoadGameBridge();
 			});
 			ScaleBox->AddChild(W_Browser);
 			if (UCanvasPanelSlot* RootWidgetSlot = Cast<UCanvasPanelSlot>(ScaleBox->Slot))

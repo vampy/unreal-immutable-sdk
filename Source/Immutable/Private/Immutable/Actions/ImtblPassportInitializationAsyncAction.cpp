@@ -14,7 +14,7 @@ UImtblPassportInitializationAsyncAction* UImtblPassportInitializationAsyncAction
 	PassportInitBlueprintNode->RedirectUri = RedirectUri;
 	PassportInitBlueprintNode->LogoutUri = LogoutUri;
 	PassportInitBlueprintNode->Environment = Environment;
-	PassportInitBlueprintNode->WorldContextObject = WorldContextObject;
+	PassportInitBlueprintNode->RetainedWorldContextObject = WorldContextObject;
 	PassportInitBlueprintNode->IsSilentLogout = IsSilentLogout;
 
 	return PassportInitBlueprintNode;
@@ -22,13 +22,14 @@ UImtblPassportInitializationAsyncAction* UImtblPassportInitializationAsyncAction
 
 void UImtblPassportInitializationAsyncAction::Activate()
 {
-	if (!WorldContextObject || !WorldContextObject->GetWorld())
+	UImmutableSubsystem* Subsystem = GetSubsystem();
+	if (!Subsystem)
 	{
 		Failed.Broadcast("Initialization failed due to missing world or world context object.");
 		return;
 	}
 
-	GetSubsystem()->WhenReady(this, &UImtblPassportInitializationAsyncAction::DoInit);
+	Subsystem->WhenReady(this, &UImtblPassportInitializationAsyncAction::DoInit);
 }
 
 void UImtblPassportInitializationAsyncAction::DoInit(TWeakObjectPtr<UImtblJSConnector> JSConnector)

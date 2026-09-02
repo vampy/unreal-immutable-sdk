@@ -86,7 +86,6 @@ struct IMMUTABLE_API FImtblJSResponse
 
 	static TOptional<FImtblJSResponse> FromJsonString(const FString& JsonString)
 	{
-		TOptional<FImtblJSResponse> Response;
 		FImtblJSResponse JSResponse;
 
 		// Parse the JSON
@@ -94,14 +93,12 @@ struct IMMUTABLE_API FImtblJSResponse
 		if (!FJsonSerializer::Deserialize(JsonReader, JSResponse.JsonObject) || !JSResponse.JsonObject.IsValid())
 		{
 			IMTBL_ERR("Could not parse response from JavaScript -- invalid JSON: %s", *JsonString)
+			return {};
 		}
-		else if (!FJsonObjectConverter::JsonObjectToUStruct(JSResponse.JsonObject.ToSharedRef(), &JSResponse, 0, 0))
+		if (!FJsonObjectConverter::JsonObjectToUStruct(JSResponse.JsonObject.ToSharedRef(), &JSResponse, 0, 0))
 		{
 			IMTBL_ERR("Could not parse response from JavaScript into the expected " "response object format: %s", *JsonString)
-		}
-		else
-		{
-			Response = JSResponse;
+			return {};
 		}
 
 		if (!JSResponse.success)
@@ -113,9 +110,12 @@ struct IMMUTABLE_API FImtblJSResponse
 				JSResponse.JsonObject->TryGetNumberField(TEXT("errorType"), ErrType);
 				JSResponse.JsonObject->TryGetStringField(TEXT("error"), Error);
 			}
-			JSResponse.Error = FImtblResponseError{static_cast<EImtblPassportError>(ErrType), Error};
+			if (ErrType >= 0 || !Error.IsEmpty())
+			{
+				JSResponse.Error = FImtblResponseError{static_cast<EImtblPassportError>(ErrType), Error};
+			}
 		}
 
-		return Response;
+		return JSResponse;
 	}
 };

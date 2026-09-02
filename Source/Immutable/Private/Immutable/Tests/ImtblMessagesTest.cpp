@@ -74,4 +74,33 @@ bool FImtblMessagesTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+#if ((ENGINE_MAJOR_VERSION <= 4) || (ENGINE_MAJOR_VERSION == 5 && ENGINE_MINOR_VERSION <= 4))
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FImtblIlluviumResponseHandlingTest, "Immutable.Illuvium.ResponseHandling", EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::EngineFilter)
+#else
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FImtblIlluviumResponseHandlingTest, "Immutable.Illuvium.ResponseHandling", EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::EngineFilter)
+#endif
+
+bool FImtblIlluviumResponseHandlingTest::RunTest(const FString& Parameters)
+{
+	const TOptional<FImtblJSResponse> Response = FImtblJSResponse::FromJsonString(
+		TEXT("{\"responseFor\":\"getToken\",\"requestId\":\"42\",\"success\":false,\"errorType\":0,\"error\":\"Denied\"}"));
+
+	TestTrue(TEXT("A response with optional result data parses"), Response.IsSet());
+	if (!Response.IsSet())
+	{
+		return false;
+	}
+
+	TestTrue(TEXT("Structured response errors are retained"), Response->Error.IsSet());
+	if (Response->Error.IsSet())
+	{
+		TestEqual(TEXT("Structured response errors include their type"), Response->Error->ToString(), FString(TEXT("AuthenticationError: Denied")));
+	}
+	TestEqual(TEXT("A missing string result is tolerated"), UImmutablePassport::GetResponseResultAsString(*Response), FString());
+	TestFalse(TEXT("A missing bool result is tolerated"), UImmutablePassport::GetResponseResultAsBool(*Response));
+	TestTrue(TEXT("A missing array result is tolerated"), UImmutablePassport::GetResponseResultAsStringArray(*Response).IsEmpty());
+
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

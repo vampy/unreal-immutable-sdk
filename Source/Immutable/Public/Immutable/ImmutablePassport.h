@@ -12,6 +12,9 @@
 
 #include "ImmutablePassport.generated.h"
 
+class UGameInstance;
+class UImmutableAnalytics;
+
 /**
  * Converts a UStruct instance to a JSON string representation.
  *
@@ -71,6 +74,7 @@ public:
 	 * Delegate used for JavaScript callbacks.
 	 */
 	DECLARE_DELEGATE_OneParam(FImtblPassportResponseDelegate, FImmutablePassportResult);
+	DECLARE_DELEGATE_ThreeParams(FImtblPassportLaunchURLDelegate, const FString& /* URL */, const FString& /* Params */, FString& /* OutError */);
 
 #if PLATFORM_ANDROID
 	/**
@@ -213,6 +217,11 @@ public:
 	 * FImtblPassportResponseDelegate to call on response from JS.
 	 */
 	void HasStoredCredentials(const FImtblPassportResponseDelegate& ResponseDelegate);
+
+	void SetCustomLaunchURLDelegate(const FImtblPassportLaunchURLDelegate& NewDelegate)
+	{
+		CustomLaunchURLDelegate = NewDelegate;
+	}
 
 	/**
 	 * Retrieves the "result" as string field from Response.JsonObject.
@@ -444,6 +453,9 @@ private:
 	 * Loads the passport settings from save game object.
 	 */
 	void LoadPassportSettings();
+	UGameInstance* GetGameInstance() const;
+	int32 GetWorldUserIndex() const;
+	void LaunchURL(const FString& URL, const FString& Params, FString& OutError);
 
 private:
 	/**
@@ -462,10 +474,11 @@ private:
 
 	/** Passport state flags. */
 	uint8 StateFlags = IPS_NONE;
+	FImtblPassportLaunchURLDelegate CustomLaunchURLDelegate;
 
 	/** Pointer to the analytics manager instance for tracking events and metrics. */
 	UPROPERTY()
-	class UImmutableAnalytics* Analytics = nullptr;
+	UImmutableAnalytics* Analytics = nullptr;
 
 	/**
 	 * PKCE data used for PKCE operations e.g. login and logout flows.

@@ -9,7 +9,7 @@
 UImtblPassportZkEvmGetBalanceAsyncAction* UImtblPassportZkEvmGetBalanceAsyncAction::ZkEvmGetBalance(UObject* WorldContextObject, const FString& Address, const FString& BlockNumberOrTag)
 {
 	UImtblPassportZkEvmGetBalanceAsyncAction* PassportInitBlueprintNode = NewObject<UImtblPassportZkEvmGetBalanceAsyncAction>();
-	PassportInitBlueprintNode->WorldContextObject = WorldContextObject;
+	PassportInitBlueprintNode->RetainedWorldContextObject = WorldContextObject;
 	PassportInitBlueprintNode->Address = Address;
 	PassportInitBlueprintNode->BlockNumberOrTag = BlockNumberOrTag;
 	return PassportInitBlueprintNode;
@@ -17,7 +17,8 @@ UImtblPassportZkEvmGetBalanceAsyncAction* UImtblPassportZkEvmGetBalanceAsyncActi
 
 void UImtblPassportZkEvmGetBalanceAsyncAction::Activate()
 {
-	if (!WorldContextObject || !WorldContextObject->GetWorld())
+	UImmutableSubsystem* Subsystem = GetSubsystem();
+	if (!Subsystem)
 	{
 		FString Err = "ZkEvmGetBalance failed due to missing world or world context object.";
 		IMTBL_WARN("%s", *Err)
@@ -25,7 +26,7 @@ void UImtblPassportZkEvmGetBalanceAsyncAction::Activate()
 		return;
 	}
 
-	GetSubsystem()->WhenReady(this, &UImtblPassportZkEvmGetBalanceAsyncAction::DoZkEvmGetBalance);
+	Subsystem->WhenReady(this, &UImtblPassportZkEvmGetBalanceAsyncAction::DoZkEvmGetBalance);
 }
 
 void UImtblPassportZkEvmGetBalanceAsyncAction::DoZkEvmGetBalance(TWeakObjectPtr<UImtblJSConnector> JSConnector)

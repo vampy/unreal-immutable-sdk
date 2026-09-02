@@ -10,7 +10,7 @@ UImtblPassportGetTokenAsyncAction* UImtblPassportGetTokenAsyncAction::GetAccessT
 {
 	UImtblPassportGetTokenAsyncAction* Node = NewObject<UImtblPassportGetTokenAsyncAction>();
 
-	Node->WorldContextObject = WorldContextObject;
+	Node->RetainedWorldContextObject = WorldContextObject;
 	Node->Type = ACCESS;
 	
 	return Node;
@@ -20,7 +20,7 @@ UImtblPassportGetTokenAsyncAction* UImtblPassportGetTokenAsyncAction::GetIdToken
 {
 	UImtblPassportGetTokenAsyncAction* Node = NewObject<UImtblPassportGetTokenAsyncAction>();
 
-	Node->WorldContextObject = WorldContextObject;
+	Node->RetainedWorldContextObject = WorldContextObject;
 	Node->Type = ID;
 
 	return Node;
@@ -28,7 +28,8 @@ UImtblPassportGetTokenAsyncAction* UImtblPassportGetTokenAsyncAction::GetIdToken
 
 void UImtblPassportGetTokenAsyncAction::Activate()
 {
-	if (!WorldContextObject || !WorldContextObject->GetWorld())
+	UImmutableSubsystem* Subsystem = GetSubsystem();
+	if (!Subsystem)
 	{
 		FString Err = "Get Token failed due to missing world or world context object.";
 		IMTBL_WARN("%s", *Err)
@@ -37,7 +38,7 @@ void UImtblPassportGetTokenAsyncAction::Activate()
 	}
 
 	
-	GetSubsystem()->WhenReady(this, &UImtblPassportGetTokenAsyncAction::DoGetToken);
+	Subsystem->WhenReady(this, &UImtblPassportGetTokenAsyncAction::DoGetToken);
 }
 
 void UImtblPassportGetTokenAsyncAction::DoGetToken(TWeakObjectPtr<UImtblJSConnector> JSConnector)

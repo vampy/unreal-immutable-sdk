@@ -9,14 +9,15 @@
 UImtblPassportZkEvmSendTransactionAsyncAction* UImtblPassportZkEvmSendTransactionAsyncAction::ZkEvmSendTransaction(UObject* WorldContextObject, const FImtblTransactionRequest& Request)
 {
 	UImtblPassportZkEvmSendTransactionAsyncAction* PassportZkEvmSendTransactionBlueprintNode = NewObject<UImtblPassportZkEvmSendTransactionAsyncAction>();
-	PassportZkEvmSendTransactionBlueprintNode->WorldContextObject = WorldContextObject;
+	PassportZkEvmSendTransactionBlueprintNode->RetainedWorldContextObject = WorldContextObject;
 	PassportZkEvmSendTransactionBlueprintNode->TransactionRequest = Request;
 	return PassportZkEvmSendTransactionBlueprintNode;
 }
 
 void UImtblPassportZkEvmSendTransactionAsyncAction::Activate()
 {
-	if (!WorldContextObject || !WorldContextObject->GetWorld())
+	UImmutableSubsystem* Subsystem = GetSubsystem();
+	if (!Subsystem)
 	{
 		FString Err = "zkEVM Send Transaction failed due to missing world or world " "context object.";
 		IMTBL_WARN("%s", *Err)
@@ -24,7 +25,7 @@ void UImtblPassportZkEvmSendTransactionAsyncAction::Activate()
 		return;
 	}
 
-	GetSubsystem()->WhenReady(this, &UImtblPassportZkEvmSendTransactionAsyncAction::DoZkEvmSendTransaction);
+	Subsystem->WhenReady(this, &UImtblPassportZkEvmSendTransactionAsyncAction::DoZkEvmSendTransaction);
 }
 
 void UImtblPassportZkEvmSendTransactionAsyncAction::DoZkEvmSendTransaction(TWeakObjectPtr<UImtblJSConnector> JSConnector)
@@ -56,7 +57,7 @@ UImtblPassportZkEvmSendTransactionWithConfirmationAA* UImtblPassportZkEvmSendTra
 {
 	UImtblPassportZkEvmSendTransactionWithConfirmationAA* ZkEvmSendTransactionWithConfirmationBPNode = NewObject<UImtblPassportZkEvmSendTransactionWithConfirmationAA>();
 	
-	ZkEvmSendTransactionWithConfirmationBPNode->WorldContextObject = WorldContextObject;
+	ZkEvmSendTransactionWithConfirmationBPNode->RetainedWorldContextObject = WorldContextObject;
 	ZkEvmSendTransactionWithConfirmationBPNode->TransactionRequest = Request;
 	
 	return ZkEvmSendTransactionWithConfirmationBPNode;
@@ -64,7 +65,8 @@ UImtblPassportZkEvmSendTransactionWithConfirmationAA* UImtblPassportZkEvmSendTra
 
 void UImtblPassportZkEvmSendTransactionWithConfirmationAA::Activate()
 {
-	if (!WorldContextObject || !WorldContextObject->GetWorld())
+	UImmutableSubsystem* Subsystem = GetSubsystem();
+	if (!Subsystem)
 	{
 		FString Err = "zkEVM Send Transaction with confirmation failed due to missing world context object.";
 
@@ -74,7 +76,7 @@ void UImtblPassportZkEvmSendTransactionWithConfirmationAA::Activate()
 		return;
 	}
 
-	GetSubsystem()->WhenReady(this, &UImtblPassportZkEvmSendTransactionWithConfirmationAA::DoZkEvmSendTransactionWithConfirmation);
+	Subsystem->WhenReady(this, &UImtblPassportZkEvmSendTransactionWithConfirmationAA::DoZkEvmSendTransactionWithConfirmation);
 }
 
 void UImtblPassportZkEvmSendTransactionWithConfirmationAA::DoZkEvmSendTransactionWithConfirmation(TWeakObjectPtr<UImtblJSConnector> JSConnector)

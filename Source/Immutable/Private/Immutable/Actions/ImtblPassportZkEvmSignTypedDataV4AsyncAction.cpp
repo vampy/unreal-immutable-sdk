@@ -9,7 +9,7 @@ UImtblPassportZkEvmSignTypedDataV4AsyncAction* UImtblPassportZkEvmSignTypedDataV
 {
 	UImtblPassportZkEvmSignTypedDataV4AsyncAction* PassportZkEvmSignTypedDataV4BlueprintNode = NewObject<UImtblPassportZkEvmSignTypedDataV4AsyncAction>();
 	
-	PassportZkEvmSignTypedDataV4BlueprintNode->WorldContextObject = WorldContextObject;
+	PassportZkEvmSignTypedDataV4BlueprintNode->RetainedWorldContextObject = WorldContextObject;
 	PassportZkEvmSignTypedDataV4BlueprintNode->JsonStringSignRequest = JsonStringRequest;
 
 	return PassportZkEvmSignTypedDataV4BlueprintNode;
@@ -17,7 +17,8 @@ UImtblPassportZkEvmSignTypedDataV4AsyncAction* UImtblPassportZkEvmSignTypedDataV
 
 void UImtblPassportZkEvmSignTypedDataV4AsyncAction::Activate()
 {
-	if (!WorldContextObject || !WorldContextObject->GetWorld())
+	UImmutableSubsystem* Subsystem = GetSubsystem();
+	if (!Subsystem)
 	{
 		FString Err = "zkEVM Sign Typed Data V4 failed due to missing world or world " "context object.";
 		IMTBL_WARN("%s", *Err)
@@ -25,7 +26,7 @@ void UImtblPassportZkEvmSignTypedDataV4AsyncAction::Activate()
 		return;
 	}
 
-	GetSubsystem()->WhenReady(this, &UImtblPassportZkEvmSignTypedDataV4AsyncAction::DoZkEvmSignTypedDataV4);
+	Subsystem->WhenReady(this, &UImtblPassportZkEvmSignTypedDataV4AsyncAction::DoZkEvmSignTypedDataV4);
 }
 
 void UImtblPassportZkEvmSignTypedDataV4AsyncAction::DoZkEvmSignTypedDataV4(TWeakObjectPtr<UImtblJSConnector> JSConnector)
