@@ -14,7 +14,7 @@ current baseline and their patch was not applied.
 | Canonical official URL | `https://github.com/immutable/unreal-immutable-sdk.git` |
 | Pinned fetched `upstream/main` | `4973cee21bfaa53dadc9e4519d53a3ae2203bb29` |
 | Matching official tag | `v1.11.5` |
-| Source implementation commit | `60128d0cf1978afafc5f21696078ed3a7e8284e8` |
+| Source implementation commit | `707cb3f309786725b77813d1d758d219cd24646f` |
 | Plugin installation state | `Immutable.uplugin` has `"Installed": false` |
 
 The authoritative marker at both the pinned base and the implementation commit is
@@ -24,7 +24,7 @@ The authoritative marker at both the pinned base and the implementation commit i
 #define ENGINE_SDK_VERSION TEXT("1.11.5")
 ```
 
-The implementation is a 30-file net delta with 658 insertions and 162 deletions. No SDK 1.9.0
+The implementation is a 30-file net delta with 640 insertions and 146 deletions. No SDK 1.9.0
 file was copied over a 1.11.5 file, no upstream-removed file was restored, and the old 1.9.0 patch
 is absent.
 
@@ -32,8 +32,8 @@ is absent.
 
 | Customization | Classification | SDK 1.11.5 result and relevant paths |
 | --- | --- | --- |
-| GC-safe Blueprint async world context | Adapted | `UImtblBlueprintAsyncAction` retains `RetainedWorldContextObject` as `UPROPERTY(Transient)`. The 1.9.0 member name would shadow Blueprint function parameters under UE 5.8 UHT, so all current connection, embedded login, Passport, and zkEVM factories use the renamed member. `Source/Immutable/Public/Immutable/Actions/ImtblBlueprintAsyncAction.h`; `Source/Immutable/Private/Immutable/Actions/*.cpp`. |
-| Safe async subsystem lookup | Ported | The shared lookup validates the retained object, world, and game instance. Each affected activation obtains one checked subsystem before `WhenReady`. `Source/Immutable/Private/Immutable/Actions/ImtblBlueprintAsyncAction.cpp`; current action implementations. |
+| GC-safe Blueprint async world context | Dropped at user request | The retention customization was reverted. `UImtblBlueprintAsyncAction` again uses upstream's raw, non-`UPROPERTY` `UObject* WorldContextObject`, and current action factories use the upstream member/assignment pattern. This intentionally removes GC retention while leaving the separate subsystem safety checks intact. `Source/Immutable/Public/Immutable/Actions/ImtblBlueprintAsyncAction.h`; `Source/Immutable/Private/Immutable/Actions/*.cpp`. |
+| Safe async subsystem lookup | Ported | The shared lookup validates the raw context object, world, and game instance. Each affected activation obtains one checked subsystem before `WhenReady`. `Source/Immutable/Private/Immutable/Actions/ImtblBlueprintAsyncAction.cpp`; current action implementations. |
 | Removed IMX async actions | Obsolete | The 1.9.0 IMX action classes no longer exist in 1.11.5. They were not restored; the current direct/embedded login and zkEVM architecture was retained. |
 | Per-PIE Passport save indexing | Ported | Save existence, load, and save use the owning game instance's PIE index; packaged/non-PIE use index `0`. `Source/Immutable/Private/Immutable/ImmutablePassport.cpp`. |
 | Initialized Passport state values | Already upstream | `StateFlags` is initialized to `IPS_NONE`; `UImmutableSaveGame` initializes `bWasConnectedViaPKCEFlow` to `false`. No duplicate change was made. `Source/Immutable/Public/Immutable/ImmutablePassport.h`; `Source/Immutable/Private/Immutable/ImmutableSaveGame.cpp`. |
@@ -69,7 +69,7 @@ is absent.
 - The port starts at official commit `4973cee...`, not the historical unpublished 1.9.0 snapshot.
 - The 1.11.5 `UImmutableBaseBrowserWidget` / `UImmutableJSConnectorBrowserWidget` architecture is extended instead of restoring `ImtblBrowserWidget`.
 - Removed IMX and legacy device-flow APIs are not recreated; current direct login, embedded login, PKCE, and zkEVM paths are covered.
-- The GC member is renamed for UE 5.8 UHT compatibility and is assigned by the current action set.
+- The historical GC-retained world-context customization was explicitly reverted; current actions use upstream's raw `WorldContextObject` member while retaining null-safe subsystem lookup.
 - The Chromium bridge queue is explicitly bounded at 256 callbacks while retaining the historical 5-second polling ceiling.
 - SDK 1.11.5 behavior already covers save existence checks, state initialization, analytics `{}`, automation flag spelling, and log-category maximum verbosity.
 - The old cache directory, initial-throbber change, local version marker, restored comments, and formatting-only deltas are dropped.
@@ -111,8 +111,8 @@ A minimal source host project was created under
 
 Results:
 
-- Win64 Development game target: passed; `Immutable` and `ImmutableCore` compiled and `HostProject.exe` linked, including the non-editor browser path.
-- Win64 Development editor target: passed; `Immutable`, `ImmutableCore`, and `ImmutableEditor` compiled and linked.
+- Win64 Development game target: passed at the current endpoint; `Immutable` and `ImmutableCore` compiled and `HostProject.exe` linked, including all affected async action files and the non-editor browser path.
+- Win64 Development editor target: passed at the current endpoint; `Immutable`, `ImmutableCore`, and `ImmutableEditor` compiled and linked, including all affected async action files.
 
 ### Automation tests
 
@@ -124,12 +124,13 @@ Results:
   '-TestExit=Automation Test Queue Empty'
 ```
 
-Two tests were discovered:
+The full suite run during the initial port discovered two tests:
 
 - `Immutable.Illuvium.ResponseHandling`: passed. It verifies structured errors and missing optional string, boolean, and array results.
 - `Immutable.JSMessages`: failed its two pre-existing exact-JSON expectations. The actual upstream 1.11.5 payload contains `logoutRedirectUri`, `isSilentLogout`, `engineSdkVersion`, and `deviceModel`, while the unchanged expected strings omit them. Serialization code was not changed by this port, so this is an upstream stale-test issue.
 
-The focused `Immutable.Illuvium.ResponseHandling` invocation also completed independently with exit code `0`.
+After the retained-world-context revert, the focused `Immutable.Illuvium.ResponseHandling` invocation
+was rerun against the current endpoint and completed with exit code `0`.
 
 ## Pending manual validation
 
@@ -145,12 +146,12 @@ No Plastic workspace was readied, switched, updated, modified, or synchronized f
 | --- | --- |
 | File | `illuvium-1.11.5-snapshot-customizations.patch` |
 | Base commit | `4973cee21bfaa53dadc9e4519d53a3ae2203bb29` |
-| Endpoint commit | `60128d0cf1978afafc5f21696078ed3a7e8284e8` |
-| Size | 71,151 bytes |
-| SHA-256 | `f29e73fe72b7e169fb995ae7c96deaf2dff2cdc339703474e56b69eba185001f` |
+| Endpoint commit | `707cb3f309786725b77813d1d758d219cd24646f` |
+| Size | 63,861 bytes |
+| SHA-256 | `27a2576b75f96d59b907d7e3c9f78b857b0c2491d3aa7153de061d8313c45069` |
 | Source files | 30 |
-| Insertions | 658 |
-| Deletions | 162 |
+| Insertions | 640 |
+| Deletions | 146 |
 
 The patch excludes `CUSTOM_MODIFICATIONS.md` and the patch file itself.
 
@@ -160,7 +161,7 @@ The patch excludes `CUSTOM_MODIFICATIONS.md` and the patch file itself.
 git diff --binary --full-index --find-renames `
   --output=illuvium-1.11.5-snapshot-customizations.patch `
   4973cee21bfaa53dadc9e4519d53a3ae2203bb29 `
-  60128d0cf1978afafc5f21696078ed3a7e8284e8 -- . `
+  707cb3f309786725b77813d1d758d219cd24646f -- . `
   ':(exclude)CUSTOM_MODIFICATIONS.md' `
   ':(exclude)illuvium-1.11.5-snapshot-customizations.patch'
 ```
@@ -180,7 +181,7 @@ git -C $ApplyTree apply --binary $PatchPath
 ### Reproduction verification
 
 The patch was checked and applied in an external disposable clone at the exact base. After staging
-the result, `git write-tree` returned `43aa74e11a4f528f0aff6de6872beaed4f851059`, exactly matching
-the tree of implementation commit `60128d0...`. This compares every tracked path, file mode, and blob
-hash (122 tracked files) and confirms no missing or extra source files. The two audit artifacts are
-outside the implementation endpoint and patch payload.
+the result, `git write-tree` returned `6a08cdb81137b6a9ac10af25913c5cf768e182f9`, exactly matching
+the source endpoint after excluding `CUSTOM_MODIFICATIONS.md` and the patch artifact. This compares
+every included tracked path, file mode, and blob hash (122 tracked files) and confirms no missing or
+extra source files. The two audit artifacts are excluded from the patch payload by pathspec.

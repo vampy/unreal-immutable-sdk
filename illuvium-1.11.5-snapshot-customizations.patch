@@ -52,7 +52,7 @@ index 2129f99ab1a7c33e33e47252b6bfce25bceb7d5c..916da83410e84df3a14b436a7a536738
 \ No newline at end of file
 +}
 diff --git a/Source/Immutable/Private/Immutable/Actions/ImtblBlueprintAsyncAction.cpp b/Source/Immutable/Private/Immutable/Actions/ImtblBlueprintAsyncAction.cpp
-index 0cb98ee6c32037170bd876702411c8fd03bb2b9b..d8b17d4cc0b56b9e2bbf05439080053f104f88fd 100644
+index 0cb98ee6c32037170bd876702411c8fd03bb2b9b..1dbb049b3ee2e61e543a24a09b8c64bac0974d0e 100644
 --- a/Source/Immutable/Private/Immutable/Actions/ImtblBlueprintAsyncAction.cpp
 +++ b/Source/Immutable/Private/Immutable/Actions/ImtblBlueprintAsyncAction.cpp
 @@ -5,11 +5,16 @@
@@ -64,29 +64,20 @@ index 0cb98ee6c32037170bd876702411c8fd03bb2b9b..d8b17d4cc0b56b9e2bbf05439080053f
  UImmutableSubsystem* UImtblBlueprintAsyncAction::GetSubsystem() const
  {
 -	if (!WorldContextObject || !WorldContextObject->GetWorld())
-+	if (!IsValid(RetainedWorldContextObject))
++	if (!IsValid(WorldContextObject))
  	{
  		return nullptr;
  	}
 -	return WorldContextObject->GetWorld()->GetGameInstance()->GetSubsystem<UImmutableSubsystem>();
 +
-+	UWorld* World = RetainedWorldContextObject->GetWorld();
++	UWorld* World = WorldContextObject->GetWorld();
 +	UGameInstance* GameInstance = World ? World->GetGameInstance() : nullptr;
 +	return GameInstance ? GameInstance->GetSubsystem<UImmutableSubsystem>() : nullptr;
  }
 diff --git a/Source/Immutable/Private/Immutable/Actions/ImtblConnectionAsyncAction.cpp b/Source/Immutable/Private/Immutable/Actions/ImtblConnectionAsyncAction.cpp
-index 67d1b7833c86cd0ae378bc58f982db06975e33a0..83471eeae8cb1c1a4825375a90033f286734adad 100644
+index 67d1b7833c86cd0ae378bc58f982db06975e33a0..8a8da8ee20114c3b278e8be2a406fda431adde8e 100644
 --- a/Source/Immutable/Private/Immutable/Actions/ImtblConnectionAsyncAction.cpp
 +++ b/Source/Immutable/Private/Immutable/Actions/ImtblConnectionAsyncAction.cpp
-@@ -8,7 +8,7 @@ UImtblConnectionAsyncActions* UImtblConnectionAsyncActions::Login(UObject* World
- {
- 	UImtblConnectionAsyncActions* Node = NewObject<UImtblConnectionAsyncActions>();
- 
--	Node->WorldContextObject = WorldContextObject;
-+	Node->RetainedWorldContextObject = WorldContextObject;
- 	Node->DirectLoginOptions = DirectLoginOptions;
- 
- 	return Node;
 @@ -16,7 +16,8 @@ UImtblConnectionAsyncActions* UImtblConnectionAsyncActions::Login(UObject* World
  
  void UImtblConnectionAsyncActions::Activate()
@@ -107,18 +98,10 @@ index 67d1b7833c86cd0ae378bc58f982db06975e33a0..83471eeae8cb1c1a4825375a90033f28
  
  UImtblConnectionAsyncActions::FPassportConnectOutputPin* UImtblConnectionAsyncActions::DynamicMulticastDelegate_OnSuccess()
 diff --git a/Source/Immutable/Private/Immutable/Actions/ImtblEmbeddedLoginAsyncAction.cpp b/Source/Immutable/Private/Immutable/Actions/ImtblEmbeddedLoginAsyncAction.cpp
-index a568c17235519a0f3b7362f9bd232d9c70830a5c..dc26fb9434d7cfc96d2276ef3a094278f598ebb3 100644
+index a568c17235519a0f3b7362f9bd232d9c70830a5c..675dd90633ed119d2ce54cd5c71820541fd4c0a2 100644
 --- a/Source/Immutable/Private/Immutable/Actions/ImtblEmbeddedLoginAsyncAction.cpp
 +++ b/Source/Immutable/Private/Immutable/Actions/ImtblEmbeddedLoginAsyncAction.cpp
-@@ -5,6 +5,7 @@
- UImtblEmbeddedLoginAsyncAction* UImtblEmbeddedLoginAsyncAction::Login(UObject* WorldContextObject, UImmutableJSConnectorBrowserWidget* JSConnectorBrowserWidget)
- {
- 	ThisClass* Action = NewObject<ThisClass>();
-+	Action->RetainedWorldContextObject = WorldContextObject;
- 
- 	if (UWorld* World = GEngine->GetWorldFromContextObject(WorldContextObject, EGetWorldErrorMode::LogAndReturnNull))
- 	{
-@@ -127,4 +128,4 @@ void UImtblEmbeddedLoginAsyncAction::LoginAsyncAction_DynamicMulticastDelegate_O
+@@ -127,4 +127,4 @@ void UImtblEmbeddedLoginAsyncAction::LoginAsyncAction_DynamicMulticastDelegate_O
  	Internal_LoginFailed_MulticastDelegate.Broadcast(String);
  	Internal_LoginFailed_DynamicMulticastDelegate.Broadcast(String);
  	SetReadyToDestroy();
@@ -126,17 +109,10 @@ index a568c17235519a0f3b7362f9bd232d9c70830a5c..dc26fb9434d7cfc96d2276ef3a094278
 \ No newline at end of file
 +}
 diff --git a/Source/Immutable/Private/Immutable/Actions/ImtblPassportConnectEvmAsyncAction.cpp b/Source/Immutable/Private/Immutable/Actions/ImtblPassportConnectEvmAsyncAction.cpp
-index 0b0cbbac6f9d3d049b7734a537c049bf8bb2d204..d29a68138845b44a4095123787914203cfe625b7 100644
+index 0b0cbbac6f9d3d049b7734a537c049bf8bb2d204..e5727a49fd989e09e2c29434f4bc3054350697fe 100644
 --- a/Source/Immutable/Private/Immutable/Actions/ImtblPassportConnectEvmAsyncAction.cpp
 +++ b/Source/Immutable/Private/Immutable/Actions/ImtblPassportConnectEvmAsyncAction.cpp
-@@ -9,13 +9,14 @@
- UImtblPassportConnectEvmAsyncAction* UImtblPassportConnectEvmAsyncAction::ConnectEvm(UObject* WorldContextObject)
- {
- 	UImtblPassportConnectEvmAsyncAction* PassportInitBlueprintNode = NewObject<UImtblPassportConnectEvmAsyncAction>();
--	PassportInitBlueprintNode->WorldContextObject = WorldContextObject;
-+	PassportInitBlueprintNode->RetainedWorldContextObject = WorldContextObject;
- 	return PassportInitBlueprintNode;
- }
+@@ -15,7 +15,8 @@ UImtblPassportConnectEvmAsyncAction* UImtblPassportConnectEvmAsyncAction::Connec
  
  void UImtblPassportConnectEvmAsyncAction::Activate()
  {
@@ -156,17 +132,10 @@ index 0b0cbbac6f9d3d049b7734a537c049bf8bb2d204..d29a68138845b44a4095123787914203
  
  void UImtblPassportConnectEvmAsyncAction::DoConnectEvm(TWeakObjectPtr<UImtblJSConnector> JSConnector)
 diff --git a/Source/Immutable/Private/Immutable/Actions/ImtblPassportGetEmailAsyncAction.cpp b/Source/Immutable/Private/Immutable/Actions/ImtblPassportGetEmailAsyncAction.cpp
-index be993f154e151c3bed76e830fbba23722634106e..ee4447e989857e4198bda0bfbfc982053881d7eb 100644
+index be993f154e151c3bed76e830fbba23722634106e..bdc35d8f25d91810021a5f7198ea6e63696d5911 100644
 --- a/Source/Immutable/Private/Immutable/Actions/ImtblPassportGetEmailAsyncAction.cpp
 +++ b/Source/Immutable/Private/Immutable/Actions/ImtblPassportGetEmailAsyncAction.cpp
-@@ -9,13 +9,14 @@
- UImtblPassportGetEmailAsyncAction* UImtblPassportGetEmailAsyncAction::GetEmail(UObject* WorldContextObject)
- {
- 	UImtblPassportGetEmailAsyncAction* PassportInitBlueprintNode = NewObject<UImtblPassportGetEmailAsyncAction>();
--	PassportInitBlueprintNode->WorldContextObject = WorldContextObject;
-+	PassportInitBlueprintNode->RetainedWorldContextObject = WorldContextObject;
- 	return PassportInitBlueprintNode;
- }
+@@ -15,7 +15,8 @@ UImtblPassportGetEmailAsyncAction* UImtblPassportGetEmailAsyncAction::GetEmail(U
  
  void UImtblPassportGetEmailAsyncAction::Activate()
  {
@@ -186,18 +155,10 @@ index be993f154e151c3bed76e830fbba23722634106e..ee4447e989857e4198bda0bfbfc98205
  }
  
 diff --git a/Source/Immutable/Private/Immutable/Actions/ImtblPassportGetLinkedAddressesAsyncAction.cpp b/Source/Immutable/Private/Immutable/Actions/ImtblPassportGetLinkedAddressesAsyncAction.cpp
-index fa3abb2219562bbc53c20dcaa4c96881deb697a2..5ac64203c69107d121f704b949e4382eba08c4f9 100644
+index fa3abb2219562bbc53c20dcaa4c96881deb697a2..2debe4898ca2619ca3b48df64ae632bb252725fc 100644
 --- a/Source/Immutable/Private/Immutable/Actions/ImtblPassportGetLinkedAddressesAsyncAction.cpp
 +++ b/Source/Immutable/Private/Immutable/Actions/ImtblPassportGetLinkedAddressesAsyncAction.cpp
-@@ -10,14 +10,15 @@ UImtblPassportGetLinkedAddressesAsyncAction* UImtblPassportGetLinkedAddressesAsy
- {
- 	UImtblPassportGetLinkedAddressesAsyncAction* Node = NewObject<UImtblPassportGetLinkedAddressesAsyncAction>();
- 	
--	Node->WorldContextObject = WorldContextObject;
-+	Node->RetainedWorldContextObject = WorldContextObject;
- 	
- 	return Node;
- }
+@@ -17,7 +17,8 @@ UImtblPassportGetLinkedAddressesAsyncAction* UImtblPassportGetLinkedAddressesAsy
  
  void UImtblPassportGetLinkedAddressesAsyncAction::Activate()
  {
@@ -217,27 +178,9 @@ index fa3abb2219562bbc53c20dcaa4c96881deb697a2..5ac64203c69107d121f704b949e4382e
  
  void UImtblPassportGetLinkedAddressesAsyncAction::DoGetLinkedAddresses(TWeakObjectPtr<UImtblJSConnector> JSConnector)
 diff --git a/Source/Immutable/Private/Immutable/Actions/ImtblPassportGetTokenAsyncAction.cpp b/Source/Immutable/Private/Immutable/Actions/ImtblPassportGetTokenAsyncAction.cpp
-index 6a70b9ce30d2c288b832d9dc4d77cb7d9027b256..4e6bff8637c5c7ec729cc446e6d9fa60f77c6696 100644
+index 6a70b9ce30d2c288b832d9dc4d77cb7d9027b256..e583e2242d4b6505c17870df61f1002a35f8985f 100644
 --- a/Source/Immutable/Private/Immutable/Actions/ImtblPassportGetTokenAsyncAction.cpp
 +++ b/Source/Immutable/Private/Immutable/Actions/ImtblPassportGetTokenAsyncAction.cpp
-@@ -10,7 +10,7 @@ UImtblPassportGetTokenAsyncAction* UImtblPassportGetTokenAsyncAction::GetAccessT
- {
- 	UImtblPassportGetTokenAsyncAction* Node = NewObject<UImtblPassportGetTokenAsyncAction>();
- 
--	Node->WorldContextObject = WorldContextObject;
-+	Node->RetainedWorldContextObject = WorldContextObject;
- 	Node->Type = ACCESS;
- 	
- 	return Node;
-@@ -20,7 +20,7 @@ UImtblPassportGetTokenAsyncAction* UImtblPassportGetTokenAsyncAction::GetIdToken
- {
- 	UImtblPassportGetTokenAsyncAction* Node = NewObject<UImtblPassportGetTokenAsyncAction>();
- 
--	Node->WorldContextObject = WorldContextObject;
-+	Node->RetainedWorldContextObject = WorldContextObject;
- 	Node->Type = ID;
- 
- 	return Node;
 @@ -28,7 +28,8 @@ UImtblPassportGetTokenAsyncAction* UImtblPassportGetTokenAsyncAction::GetIdToken
  
  void UImtblPassportGetTokenAsyncAction::Activate()
@@ -258,18 +201,10 @@ index 6a70b9ce30d2c288b832d9dc4d77cb7d9027b256..4e6bff8637c5c7ec729cc446e6d9fa60
  
  void UImtblPassportGetTokenAsyncAction::DoGetToken(TWeakObjectPtr<UImtblJSConnector> JSConnector)
 diff --git a/Source/Immutable/Private/Immutable/Actions/ImtblPassportHasStoredCredentialsAsyncAction.cpp b/Source/Immutable/Private/Immutable/Actions/ImtblPassportHasStoredCredentialsAsyncAction.cpp
-index 25b790aac18d6a535c4f951b94b264c608c8aa7a..11614eb60208382763a6d6e20fbf0ddb25558292 100644
+index 25b790aac18d6a535c4f951b94b264c608c8aa7a..6d56f132544fc0f1ca2e34906264fbff8ae7498d 100644
 --- a/Source/Immutable/Private/Immutable/Actions/ImtblPassportHasStoredCredentialsAsyncAction.cpp
 +++ b/Source/Immutable/Private/Immutable/Actions/ImtblPassportHasStoredCredentialsAsyncAction.cpp
-@@ -9,14 +9,15 @@ UImtblPassportHasStoredCredentialsAsyncAction* UImtblPassportHasStoredCredential
- {
- 	UImtblPassportHasStoredCredentialsAsyncAction* PassportInitBlueprintNode = NewObject<UImtblPassportHasStoredCredentialsAsyncAction>();
- 
--	PassportInitBlueprintNode->WorldContextObject = WorldContextObject;
-+	PassportInitBlueprintNode->RetainedWorldContextObject = WorldContextObject;
- 
- 	return PassportInitBlueprintNode;
- }
+@@ -16,7 +16,8 @@ UImtblPassportHasStoredCredentialsAsyncAction* UImtblPassportHasStoredCredential
  
  void UImtblPassportHasStoredCredentialsAsyncAction::Activate()
  {
@@ -289,18 +224,9 @@ index 25b790aac18d6a535c4f951b94b264c608c8aa7a..11614eb60208382763a6d6e20fbf0ddb
  
  void UImtblPassportHasStoredCredentialsAsyncAction::DoHasStoredCredentials(TWeakObjectPtr<UImtblJSConnector> JSConnector)
 diff --git a/Source/Immutable/Private/Immutable/Actions/ImtblPassportInitializationAsyncAction.cpp b/Source/Immutable/Private/Immutable/Actions/ImtblPassportInitializationAsyncAction.cpp
-index 280e7a9df84eb25a59448d9826f00feaac997298..df60d138c0bd20e17eb6e2c1c15d44c5e076f303 100644
+index 280e7a9df84eb25a59448d9826f00feaac997298..e70899ba170aaa625bae8d2e3b3c2ad0a317d61e 100644
 --- a/Source/Immutable/Private/Immutable/Actions/ImtblPassportInitializationAsyncAction.cpp
 +++ b/Source/Immutable/Private/Immutable/Actions/ImtblPassportInitializationAsyncAction.cpp
-@@ -14,7 +14,7 @@ UImtblPassportInitializationAsyncAction* UImtblPassportInitializationAsyncAction
- 	PassportInitBlueprintNode->RedirectUri = RedirectUri;
- 	PassportInitBlueprintNode->LogoutUri = LogoutUri;
- 	PassportInitBlueprintNode->Environment = Environment;
--	PassportInitBlueprintNode->WorldContextObject = WorldContextObject;
-+	PassportInitBlueprintNode->RetainedWorldContextObject = WorldContextObject;
- 	PassportInitBlueprintNode->IsSilentLogout = IsSilentLogout;
- 
- 	return PassportInitBlueprintNode;
 @@ -22,13 +22,14 @@ UImtblPassportInitializationAsyncAction* UImtblPassportInitializationAsyncAction
  
  void UImtblPassportInitializationAsyncAction::Activate()
@@ -319,18 +245,9 @@ index 280e7a9df84eb25a59448d9826f00feaac997298..df60d138c0bd20e17eb6e2c1c15d44c5
  
  void UImtblPassportInitializationAsyncAction::DoInit(TWeakObjectPtr<UImtblJSConnector> JSConnector)
 diff --git a/Source/Immutable/Private/Immutable/Actions/ImtblPassportLogoutAsyncAction.cpp b/Source/Immutable/Private/Immutable/Actions/ImtblPassportLogoutAsyncAction.cpp
-index 9ced8e5ee25ea71df5aced3d3cdba589f3841e96..7842c688e7ccbf58556fc4f331ebd3f0fd0b6bae 100644
+index 9ced8e5ee25ea71df5aced3d3cdba589f3841e96..236f588895b56ab717c0b81894f48a7c3f168961 100644
 --- a/Source/Immutable/Private/Immutable/Actions/ImtblPassportLogoutAsyncAction.cpp
 +++ b/Source/Immutable/Private/Immutable/Actions/ImtblPassportLogoutAsyncAction.cpp
-@@ -10,7 +10,7 @@ UImtblPassportLogoutAsyncAction* UImtblPassportLogoutAsyncAction::Logout(UObject
- {
- 	UImtblPassportLogoutAsyncAction* PassportInitBlueprintNode = NewObject<UImtblPassportLogoutAsyncAction>();
- 
--	PassportInitBlueprintNode->WorldContextObject = WorldContextObject;
-+	PassportInitBlueprintNode->RetainedWorldContextObject = WorldContextObject;
- 	PassportInitBlueprintNode->bDoHardLogout = DoHardLogout;
- 
- 	return PassportInitBlueprintNode;
 @@ -18,7 +18,8 @@ UImtblPassportLogoutAsyncAction* UImtblPassportLogoutAsyncAction::Logout(UObject
  
  void UImtblPassportLogoutAsyncAction::Activate()
@@ -351,18 +268,9 @@ index 9ced8e5ee25ea71df5aced3d3cdba589f3841e96..7842c688e7ccbf58556fc4f331ebd3f0
  
  void UImtblPassportLogoutAsyncAction::DoLogout(TWeakObjectPtr<UImtblJSConnector> JSConnector)
 diff --git a/Source/Immutable/Private/Immutable/Actions/ImtblPassportZkEvmGetBalanceAsyncAction.cpp b/Source/Immutable/Private/Immutable/Actions/ImtblPassportZkEvmGetBalanceAsyncAction.cpp
-index cc6ecbb973cad89d2d63b9a6b533ec886eb531ca..6c47601870632446e1c70b5f61d64d45341de7b7 100644
+index cc6ecbb973cad89d2d63b9a6b533ec886eb531ca..c02d50b86c58c7b6cfd338ae46d603cd5aa99836 100644
 --- a/Source/Immutable/Private/Immutable/Actions/ImtblPassportZkEvmGetBalanceAsyncAction.cpp
 +++ b/Source/Immutable/Private/Immutable/Actions/ImtblPassportZkEvmGetBalanceAsyncAction.cpp
-@@ -9,7 +9,7 @@
- UImtblPassportZkEvmGetBalanceAsyncAction* UImtblPassportZkEvmGetBalanceAsyncAction::ZkEvmGetBalance(UObject* WorldContextObject, const FString& Address, const FString& BlockNumberOrTag)
- {
- 	UImtblPassportZkEvmGetBalanceAsyncAction* PassportInitBlueprintNode = NewObject<UImtblPassportZkEvmGetBalanceAsyncAction>();
--	PassportInitBlueprintNode->WorldContextObject = WorldContextObject;
-+	PassportInitBlueprintNode->RetainedWorldContextObject = WorldContextObject;
- 	PassportInitBlueprintNode->Address = Address;
- 	PassportInitBlueprintNode->BlockNumberOrTag = BlockNumberOrTag;
- 	return PassportInitBlueprintNode;
 @@ -17,7 +17,8 @@ UImtblPassportZkEvmGetBalanceAsyncAction* UImtblPassportZkEvmGetBalanceAsyncActi
  
  void UImtblPassportZkEvmGetBalanceAsyncAction::Activate()
@@ -383,18 +291,9 @@ index cc6ecbb973cad89d2d63b9a6b533ec886eb531ca..6c47601870632446e1c70b5f61d64d45
  
  void UImtblPassportZkEvmGetBalanceAsyncAction::DoZkEvmGetBalance(TWeakObjectPtr<UImtblJSConnector> JSConnector)
 diff --git a/Source/Immutable/Private/Immutable/Actions/ImtblPassportZkEvmGetTransactionReceiptAA.cpp b/Source/Immutable/Private/Immutable/Actions/ImtblPassportZkEvmGetTransactionReceiptAA.cpp
-index 563c62cd92a9538d0ad9545215ab8c1c39d61b24..ee65f5e2c080213b092dc5b9268246ba8aefa9af 100644
+index 563c62cd92a9538d0ad9545215ab8c1c39d61b24..2a08ad0337a2e66874e2486266fddc76f5010e61 100644
 --- a/Source/Immutable/Private/Immutable/Actions/ImtblPassportZkEvmGetTransactionReceiptAA.cpp
 +++ b/Source/Immutable/Private/Immutable/Actions/ImtblPassportZkEvmGetTransactionReceiptAA.cpp
-@@ -10,7 +10,7 @@ UImtblPassportZkEvmGetTransactionReceiptAA* UImtblPassportZkEvmGetTransactionRec
- {
- 	UImtblPassportZkEvmGetTransactionReceiptAA* PassportZkEvmSendTransactionBlueprintNode = NewObject<UImtblPassportZkEvmGetTransactionReceiptAA>();
- 	
--	PassportZkEvmSendTransactionBlueprintNode->WorldContextObject = WorldContextObject;
-+	PassportZkEvmSendTransactionBlueprintNode->RetainedWorldContextObject = WorldContextObject;
- 	PassportZkEvmSendTransactionBlueprintNode->Hash = Hash;
- 	
- 	return PassportZkEvmSendTransactionBlueprintNode;
 @@ -18,7 +18,8 @@ UImtblPassportZkEvmGetTransactionReceiptAA* UImtblPassportZkEvmGetTransactionRec
  
  void UImtblPassportZkEvmGetTransactionReceiptAA::Activate()
@@ -415,17 +314,10 @@ index 563c62cd92a9538d0ad9545215ab8c1c39d61b24..ee65f5e2c080213b092dc5b9268246ba
  
  void UImtblPassportZkEvmGetTransactionReceiptAA::DoZkEvmGetTransactionReceipt(TWeakObjectPtr<UImtblJSConnector> JSConnector)
 diff --git a/Source/Immutable/Private/Immutable/Actions/ImtblPassportZkEvmRequestAccountsAsyncAction.cpp b/Source/Immutable/Private/Immutable/Actions/ImtblPassportZkEvmRequestAccountsAsyncAction.cpp
-index a6ebd02614647848c32d0a45e9b67025849d88cd..e7c3e5f629d027092aa390c43f1fb19021e94c2c 100644
+index a6ebd02614647848c32d0a45e9b67025849d88cd..79f6f33b88a8fc59a1c4f9a5c911757a8a21dc3f 100644
 --- a/Source/Immutable/Private/Immutable/Actions/ImtblPassportZkEvmRequestAccountsAsyncAction.cpp
 +++ b/Source/Immutable/Private/Immutable/Actions/ImtblPassportZkEvmRequestAccountsAsyncAction.cpp
-@@ -9,13 +9,14 @@
- UImtblPassportZkEvmRequestAccountsAsyncAction* UImtblPassportZkEvmRequestAccountsAsyncAction::RequestAccounts(UObject* WorldContextObject)
- {
- 	UImtblPassportZkEvmRequestAccountsAsyncAction* PassportInitBlueprintNode = NewObject<UImtblPassportZkEvmRequestAccountsAsyncAction>();
--	PassportInitBlueprintNode->WorldContextObject = WorldContextObject;
-+	PassportInitBlueprintNode->RetainedWorldContextObject = WorldContextObject;
- 	return PassportInitBlueprintNode;
- }
+@@ -15,7 +15,8 @@ UImtblPassportZkEvmRequestAccountsAsyncAction* UImtblPassportZkEvmRequestAccount
  
  void UImtblPassportZkEvmRequestAccountsAsyncAction::Activate()
  {
@@ -445,18 +337,10 @@ index a6ebd02614647848c32d0a45e9b67025849d88cd..e7c3e5f629d027092aa390c43f1fb190
  
  void UImtblPassportZkEvmRequestAccountsAsyncAction::DoRequestAccounts(TWeakObjectPtr<UImtblJSConnector> JSConnector)
 diff --git a/Source/Immutable/Private/Immutable/Actions/ImtblPassportZkEvmSendTransactionAsyncAction.cpp b/Source/Immutable/Private/Immutable/Actions/ImtblPassportZkEvmSendTransactionAsyncAction.cpp
-index c16e67674fd8c96cc0f4a693fc8a9cee5b3efb5d..4f9ebac06f649f5105a6921cad9ae114244c93b8 100644
+index c16e67674fd8c96cc0f4a693fc8a9cee5b3efb5d..f8d491bfca3c4d3cc90292352817e3bfa16c3630 100644
 --- a/Source/Immutable/Private/Immutable/Actions/ImtblPassportZkEvmSendTransactionAsyncAction.cpp
 +++ b/Source/Immutable/Private/Immutable/Actions/ImtblPassportZkEvmSendTransactionAsyncAction.cpp
-@@ -9,14 +9,15 @@
- UImtblPassportZkEvmSendTransactionAsyncAction* UImtblPassportZkEvmSendTransactionAsyncAction::ZkEvmSendTransaction(UObject* WorldContextObject, const FImtblTransactionRequest& Request)
- {
- 	UImtblPassportZkEvmSendTransactionAsyncAction* PassportZkEvmSendTransactionBlueprintNode = NewObject<UImtblPassportZkEvmSendTransactionAsyncAction>();
--	PassportZkEvmSendTransactionBlueprintNode->WorldContextObject = WorldContextObject;
-+	PassportZkEvmSendTransactionBlueprintNode->RetainedWorldContextObject = WorldContextObject;
- 	PassportZkEvmSendTransactionBlueprintNode->TransactionRequest = Request;
- 	return PassportZkEvmSendTransactionBlueprintNode;
- }
+@@ -16,7 +16,8 @@ UImtblPassportZkEvmSendTransactionAsyncAction* UImtblPassportZkEvmSendTransactio
  
  void UImtblPassportZkEvmSendTransactionAsyncAction::Activate()
  {
@@ -475,15 +359,6 @@ index c16e67674fd8c96cc0f4a693fc8a9cee5b3efb5d..4f9ebac06f649f5105a6921cad9ae114
  }
  
  void UImtblPassportZkEvmSendTransactionAsyncAction::DoZkEvmSendTransaction(TWeakObjectPtr<UImtblJSConnector> JSConnector)
-@@ -56,7 +57,7 @@ UImtblPassportZkEvmSendTransactionWithConfirmationAA* UImtblPassportZkEvmSendTra
- {
- 	UImtblPassportZkEvmSendTransactionWithConfirmationAA* ZkEvmSendTransactionWithConfirmationBPNode = NewObject<UImtblPassportZkEvmSendTransactionWithConfirmationAA>();
- 	
--	ZkEvmSendTransactionWithConfirmationBPNode->WorldContextObject = WorldContextObject;
-+	ZkEvmSendTransactionWithConfirmationBPNode->RetainedWorldContextObject = WorldContextObject;
- 	ZkEvmSendTransactionWithConfirmationBPNode->TransactionRequest = Request;
- 	
- 	return ZkEvmSendTransactionWithConfirmationBPNode;
 @@ -64,7 +65,8 @@ UImtblPassportZkEvmSendTransactionWithConfirmationAA* UImtblPassportZkEvmSendTra
  
  void UImtblPassportZkEvmSendTransactionWithConfirmationAA::Activate()
@@ -504,18 +379,9 @@ index c16e67674fd8c96cc0f4a693fc8a9cee5b3efb5d..4f9ebac06f649f5105a6921cad9ae114
  
  void UImtblPassportZkEvmSendTransactionWithConfirmationAA::DoZkEvmSendTransactionWithConfirmation(TWeakObjectPtr<UImtblJSConnector> JSConnector)
 diff --git a/Source/Immutable/Private/Immutable/Actions/ImtblPassportZkEvmSignTypedDataV4AsyncAction.cpp b/Source/Immutable/Private/Immutable/Actions/ImtblPassportZkEvmSignTypedDataV4AsyncAction.cpp
-index 67f79b30d61caa153dac797315d2e52418724ced..e0c99dba4c6fc9f4ba9c956d00b73230a0ddaafd 100644
+index 67f79b30d61caa153dac797315d2e52418724ced..7e653622bb552756ddd922c8975a1c2429ea1edf 100644
 --- a/Source/Immutable/Private/Immutable/Actions/ImtblPassportZkEvmSignTypedDataV4AsyncAction.cpp
 +++ b/Source/Immutable/Private/Immutable/Actions/ImtblPassportZkEvmSignTypedDataV4AsyncAction.cpp
-@@ -9,7 +9,7 @@ UImtblPassportZkEvmSignTypedDataV4AsyncAction* UImtblPassportZkEvmSignTypedDataV
- {
- 	UImtblPassportZkEvmSignTypedDataV4AsyncAction* PassportZkEvmSignTypedDataV4BlueprintNode = NewObject<UImtblPassportZkEvmSignTypedDataV4AsyncAction>();
- 	
--	PassportZkEvmSignTypedDataV4BlueprintNode->WorldContextObject = WorldContextObject;
-+	PassportZkEvmSignTypedDataV4BlueprintNode->RetainedWorldContextObject = WorldContextObject;
- 	PassportZkEvmSignTypedDataV4BlueprintNode->JsonStringSignRequest = JsonStringRequest;
- 
- 	return PassportZkEvmSignTypedDataV4BlueprintNode;
 @@ -17,7 +17,8 @@ UImtblPassportZkEvmSignTypedDataV4AsyncAction* UImtblPassportZkEvmSignTypedDataV
  
  void UImtblPassportZkEvmSignTypedDataV4AsyncAction::Activate()
@@ -1498,7 +1364,7 @@ index 3918188d6b1075bc2fb562eb59c3f85387c8c701..14090bbb80155613e367d79a53ef943c
 +
  #endif // WITH_DEV_AUTOMATION_TESTS
 diff --git a/Source/Immutable/Public/Immutable/Actions/ImtblBlueprintAsyncAction.h b/Source/Immutable/Public/Immutable/Actions/ImtblBlueprintAsyncAction.h
-index 7f8d91901eecb954b9c541e2f0e55a20eed82dd1..2d6b7f43ff487af8a3318193ea38bfdc0f980d0a 100644
+index 7f8d91901eecb954b9c541e2f0e55a20eed82dd1..0ce3f42bdae279e4de466d56b2d606965aa342c4 100644
 --- a/Source/Immutable/Public/Immutable/Actions/ImtblBlueprintAsyncAction.h
 +++ b/Source/Immutable/Public/Immutable/Actions/ImtblBlueprintAsyncAction.h
 @@ -2,11 +2,12 @@
@@ -1515,16 +1381,6 @@ index 7f8d91901eecb954b9c541e2f0e55a20eed82dd1..2d6b7f43ff487af8a3318193ea38bfdc
  /**
   
   * base class for asynchronous actions
-@@ -17,7 +18,8 @@ class IMMUTABLE_API UImtblBlueprintAsyncAction : public UBlueprintAsyncActionBas
- 	GENERATED_BODY()
- 
- protected:
--	UObject* WorldContextObject;
-+	UPROPERTY(Transient)
-+	TObjectPtr<UObject> RetainedWorldContextObject = nullptr;
- 
- 	// Get subsystem
- 	UImmutableSubsystem* GetSubsystem() const;
 diff --git a/Source/Immutable/Public/Immutable/Browser/ImmutableBaseBrowserWidget.h b/Source/Immutable/Public/Immutable/Browser/ImmutableBaseBrowserWidget.h
 index cabde28b4b06f0462cb9dca61aa4c518fe205c15..da6891b454e426621726083793fb19802518880f 100644
 --- a/Source/Immutable/Public/Immutable/Browser/ImmutableBaseBrowserWidget.h
