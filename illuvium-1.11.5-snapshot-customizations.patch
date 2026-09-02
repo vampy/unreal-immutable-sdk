@@ -1,0 +1,1716 @@
+diff --git a/Immutable.uplugin b/Immutable.uplugin
+index 681ac6023e6ca82df613d26a47dbf3e7b266c7e9..f007edef4c42eb5f1fe0108d46be33e9e0cc4e6a 100644
+--- a/Immutable.uplugin
++++ b/Immutable.uplugin
+@@ -14,7 +14,7 @@
+ 	"CanContainContent": true,
+ 	"IsBetaVersion": true,
+ 	"IsExperimentalVersion": true,
+-	"Installed": true,
++	"Installed": false,
+ 	"Modules": [
+ 		{
+ 			"Name": "Immutable",
+@@ -38,4 +38,4 @@
+ 			"Enabled": true
+ 		}
+ 	]
+-}
+\ No newline at end of file
++}
+diff --git a/Source/Immutable/Immutable.Build.cs b/Source/Immutable/Immutable.Build.cs
+index 2129f99ab1a7c33e33e47252b6bfce25bceb7d5c..916da83410e84df3a14b436a7a53673886b389db 100644
+--- a/Source/Immutable/Immutable.Build.cs
++++ b/Source/Immutable/Immutable.Build.cs
+@@ -9,6 +9,8 @@ public class Immutable : ModuleRules
+ 	public Immutable(ReadOnlyTargetRules Target) : base(Target)
+ 	{
+ 		PCHUsage = ModuleRules.PCHUsageMode.UseExplicitOrSharedPCHs;
++		IWYUSupport = IWYUSupport.Full;
++		bUseUnity = true;
+ 
+ #if UE_5_1_OR_LATER
+ 			IncludeOrderVersion = EngineIncludeOrderVersion.Latest;
+@@ -57,6 +59,12 @@ public class Immutable : ModuleRules
+ 
+ #if UE_5_1_OR_LATER
+ 			PrivateDependencyModuleNames.Add("WebBrowser");
++			if (Target.Platform == UnrealTargetPlatform.Win64
++				|| Target.Platform == UnrealTargetPlatform.Mac
++				|| Target.Platform == UnrealTargetPlatform.Linux)
++			{
++				AddEngineThirdPartyPrivateStaticDependencies(Target, "CEF3");
++			}
+ 			PublicDefinitions.Add("USING_BUNDLED_CEF=1");
+ 			PublicDefinitions.Add("USING_BLUI_CEF=0");
+ #else
+@@ -120,4 +128,4 @@ public class Immutable : ModuleRules
+ 			);
+ 		}
+ 	}
+-}
+\ No newline at end of file
++}
+diff --git a/Source/Immutable/Private/Immutable/Actions/ImtblBlueprintAsyncAction.cpp b/Source/Immutable/Private/Immutable/Actions/ImtblBlueprintAsyncAction.cpp
+index 0cb98ee6c32037170bd876702411c8fd03bb2b9b..d8b17d4cc0b56b9e2bbf05439080053f104f88fd 100644
+--- a/Source/Immutable/Private/Immutable/Actions/ImtblBlueprintAsyncAction.cpp
++++ b/Source/Immutable/Private/Immutable/Actions/ImtblBlueprintAsyncAction.cpp
+@@ -5,11 +5,16 @@
+ #include "Engine/GameInstance.h"
+ #include "Engine/World.h"
+ 
++#include "Immutable/ImmutableSubsystem.h"
++
+ UImmutableSubsystem* UImtblBlueprintAsyncAction::GetSubsystem() const
+ {
+-	if (!WorldContextObject || !WorldContextObject->GetWorld())
++	if (!IsValid(RetainedWorldContextObject))
+ 	{
+ 		return nullptr;
+ 	}
+-	return WorldContextObject->GetWorld()->GetGameInstance()->GetSubsystem<UImmutableSubsystem>();
++
++	UWorld* World = RetainedWorldContextObject->GetWorld();
++	UGameInstance* GameInstance = World ? World->GetGameInstance() : nullptr;
++	return GameInstance ? GameInstance->GetSubsystem<UImmutableSubsystem>() : nullptr;
+ }
+diff --git a/Source/Immutable/Private/Immutable/Actions/ImtblConnectionAsyncAction.cpp b/Source/Immutable/Private/Immutable/Actions/ImtblConnectionAsyncAction.cpp
+index 67d1b7833c86cd0ae378bc58f982db06975e33a0..83471eeae8cb1c1a4825375a90033f286734adad 100644
+--- a/Source/Immutable/Private/Immutable/Actions/ImtblConnectionAsyncAction.cpp
++++ b/Source/Immutable/Private/Immutable/Actions/ImtblConnectionAsyncAction.cpp
+@@ -8,7 +8,7 @@ UImtblConnectionAsyncActions* UImtblConnectionAsyncActions::Login(UObject* World
+ {
+ 	UImtblConnectionAsyncActions* Node = NewObject<UImtblConnectionAsyncActions>();
+ 
+-	Node->WorldContextObject = WorldContextObject;
++	Node->RetainedWorldContextObject = WorldContextObject;
+ 	Node->DirectLoginOptions = DirectLoginOptions;
+ 
+ 	return Node;
+@@ -16,7 +16,8 @@ UImtblConnectionAsyncActions* UImtblConnectionAsyncActions::Login(UObject* World
+ 
+ void UImtblConnectionAsyncActions::Activate()
+ {
+-	if (!WorldContextObject || !WorldContextObject->GetWorld())
++	UImmutableSubsystem* Subsystem = GetSubsystem();
++	if (!Subsystem)
+ 	{
+ 		FString Error = "Connect failed due to missing world or world context object.";
+ 		IMTBL_WARN("%s", *Error)
+@@ -25,7 +26,7 @@ void UImtblConnectionAsyncActions::Activate()
+ 		return;
+ 	}
+ 
+-	GetSubsystem()->WhenReady(this, &UImtblConnectionAsyncActions::DoConnect);
++	Subsystem->WhenReady(this, &UImtblConnectionAsyncActions::DoConnect);
+ }
+ 
+ UImtblConnectionAsyncActions::FPassportConnectOutputPin* UImtblConnectionAsyncActions::DynamicMulticastDelegate_OnSuccess()
+diff --git a/Source/Immutable/Private/Immutable/Actions/ImtblEmbeddedLoginAsyncAction.cpp b/Source/Immutable/Private/Immutable/Actions/ImtblEmbeddedLoginAsyncAction.cpp
+index a568c17235519a0f3b7362f9bd232d9c70830a5c..dc26fb9434d7cfc96d2276ef3a094278f598ebb3 100644
+--- a/Source/Immutable/Private/Immutable/Actions/ImtblEmbeddedLoginAsyncAction.cpp
++++ b/Source/Immutable/Private/Immutable/Actions/ImtblEmbeddedLoginAsyncAction.cpp
+@@ -5,6 +5,7 @@
+ UImtblEmbeddedLoginAsyncAction* UImtblEmbeddedLoginAsyncAction::Login(UObject* WorldContextObject, UImmutableJSConnectorBrowserWidget* JSConnectorBrowserWidget)
+ {
+ 	ThisClass* Action = NewObject<ThisClass>();
++	Action->RetainedWorldContextObject = WorldContextObject;
+ 
+ 	if (UWorld* World = GEngine->GetWorldFromContextObject(WorldContextObject, EGetWorldErrorMode::LogAndReturnNull))
+ 	{
+@@ -127,4 +128,4 @@ void UImtblEmbeddedLoginAsyncAction::LoginAsyncAction_DynamicMulticastDelegate_O
+ 	Internal_LoginFailed_MulticastDelegate.Broadcast(String);
+ 	Internal_LoginFailed_DynamicMulticastDelegate.Broadcast(String);
+ 	SetReadyToDestroy();
+-}
+\ No newline at end of file
++}
+diff --git a/Source/Immutable/Private/Immutable/Actions/ImtblPassportConnectEvmAsyncAction.cpp b/Source/Immutable/Private/Immutable/Actions/ImtblPassportConnectEvmAsyncAction.cpp
+index 0b0cbbac6f9d3d049b7734a537c049bf8bb2d204..d29a68138845b44a4095123787914203cfe625b7 100644
+--- a/Source/Immutable/Private/Immutable/Actions/ImtblPassportConnectEvmAsyncAction.cpp
++++ b/Source/Immutable/Private/Immutable/Actions/ImtblPassportConnectEvmAsyncAction.cpp
+@@ -9,13 +9,14 @@
+ UImtblPassportConnectEvmAsyncAction* UImtblPassportConnectEvmAsyncAction::ConnectEvm(UObject* WorldContextObject)
+ {
+ 	UImtblPassportConnectEvmAsyncAction* PassportInitBlueprintNode = NewObject<UImtblPassportConnectEvmAsyncAction>();
+-	PassportInitBlueprintNode->WorldContextObject = WorldContextObject;
++	PassportInitBlueprintNode->RetainedWorldContextObject = WorldContextObject;
+ 	return PassportInitBlueprintNode;
+ }
+ 
+ void UImtblPassportConnectEvmAsyncAction::Activate()
+ {
+-	if (!WorldContextObject || !WorldContextObject->GetWorld())
++	UImmutableSubsystem* Subsystem = GetSubsystem();
++	if (!Subsystem)
+ 	{
+ 		FString Err = "ConnectEvm failed due to missing world or world context object.";
+ 		IMTBL_WARN("%s", *Err)
+@@ -23,7 +24,7 @@ void UImtblPassportConnectEvmAsyncAction::Activate()
+ 		return;
+ 	}
+ 
+-	GetSubsystem()->WhenReady(this, &UImtblPassportConnectEvmAsyncAction::DoConnectEvm);
++	Subsystem->WhenReady(this, &UImtblPassportConnectEvmAsyncAction::DoConnectEvm);
+ }
+ 
+ void UImtblPassportConnectEvmAsyncAction::DoConnectEvm(TWeakObjectPtr<UImtblJSConnector> JSConnector)
+diff --git a/Source/Immutable/Private/Immutable/Actions/ImtblPassportGetEmailAsyncAction.cpp b/Source/Immutable/Private/Immutable/Actions/ImtblPassportGetEmailAsyncAction.cpp
+index be993f154e151c3bed76e830fbba23722634106e..ee4447e989857e4198bda0bfbfc982053881d7eb 100644
+--- a/Source/Immutable/Private/Immutable/Actions/ImtblPassportGetEmailAsyncAction.cpp
++++ b/Source/Immutable/Private/Immutable/Actions/ImtblPassportGetEmailAsyncAction.cpp
+@@ -9,13 +9,14 @@
+ UImtblPassportGetEmailAsyncAction* UImtblPassportGetEmailAsyncAction::GetEmail(UObject* WorldContextObject)
+ {
+ 	UImtblPassportGetEmailAsyncAction* PassportInitBlueprintNode = NewObject<UImtblPassportGetEmailAsyncAction>();
+-	PassportInitBlueprintNode->WorldContextObject = WorldContextObject;
++	PassportInitBlueprintNode->RetainedWorldContextObject = WorldContextObject;
+ 	return PassportInitBlueprintNode;
+ }
+ 
+ void UImtblPassportGetEmailAsyncAction::Activate()
+ {
+-	if (!WorldContextObject || !WorldContextObject->GetWorld())
++	UImmutableSubsystem* Subsystem = GetSubsystem();
++	if (!Subsystem)
+ 	{
+ 		FString Err = "GetEmail failed due to missing world or world context object.";
+ 		IMTBL_WARN("%s", *Err)
+@@ -23,7 +24,7 @@ void UImtblPassportGetEmailAsyncAction::Activate()
+ 		return;
+ 	}
+ 
+-	GetSubsystem()->WhenReady(this, &UImtblPassportGetEmailAsyncAction::DoGetEmail); //, /* timoutSec
++	Subsystem->WhenReady(this, &UImtblPassportGetEmailAsyncAction::DoGetEmail); //, /* timoutSec
+ 	//*/ 15.0f);
+ }
+ 
+diff --git a/Source/Immutable/Private/Immutable/Actions/ImtblPassportGetLinkedAddressesAsyncAction.cpp b/Source/Immutable/Private/Immutable/Actions/ImtblPassportGetLinkedAddressesAsyncAction.cpp
+index fa3abb2219562bbc53c20dcaa4c96881deb697a2..5ac64203c69107d121f704b949e4382eba08c4f9 100644
+--- a/Source/Immutable/Private/Immutable/Actions/ImtblPassportGetLinkedAddressesAsyncAction.cpp
++++ b/Source/Immutable/Private/Immutable/Actions/ImtblPassportGetLinkedAddressesAsyncAction.cpp
+@@ -10,14 +10,15 @@ UImtblPassportGetLinkedAddressesAsyncAction* UImtblPassportGetLinkedAddressesAsy
+ {
+ 	UImtblPassportGetLinkedAddressesAsyncAction* Node = NewObject<UImtblPassportGetLinkedAddressesAsyncAction>();
+ 	
+-	Node->WorldContextObject = WorldContextObject;
++	Node->RetainedWorldContextObject = WorldContextObject;
+ 	
+ 	return Node;
+ }
+ 
+ void UImtblPassportGetLinkedAddressesAsyncAction::Activate()
+ {
+-	if (!WorldContextObject || !WorldContextObject->GetWorld())
++	UImmutableSubsystem* Subsystem = GetSubsystem();
++	if (!Subsystem)
+ 	{
+ 		FString Err = "GetLinkedAddresses failed due to missing world or world context object.";
+ 		
+@@ -27,7 +28,7 @@ void UImtblPassportGetLinkedAddressesAsyncAction::Activate()
+ 		return;
+ 	}
+ 
+-	GetSubsystem()->WhenReady(this, &UImtblPassportGetLinkedAddressesAsyncAction::DoGetLinkedAddresses);
++	Subsystem->WhenReady(this, &UImtblPassportGetLinkedAddressesAsyncAction::DoGetLinkedAddresses);
+ }
+ 
+ void UImtblPassportGetLinkedAddressesAsyncAction::DoGetLinkedAddresses(TWeakObjectPtr<UImtblJSConnector> JSConnector)
+diff --git a/Source/Immutable/Private/Immutable/Actions/ImtblPassportGetTokenAsyncAction.cpp b/Source/Immutable/Private/Immutable/Actions/ImtblPassportGetTokenAsyncAction.cpp
+index 6a70b9ce30d2c288b832d9dc4d77cb7d9027b256..4e6bff8637c5c7ec729cc446e6d9fa60f77c6696 100644
+--- a/Source/Immutable/Private/Immutable/Actions/ImtblPassportGetTokenAsyncAction.cpp
++++ b/Source/Immutable/Private/Immutable/Actions/ImtblPassportGetTokenAsyncAction.cpp
+@@ -10,7 +10,7 @@ UImtblPassportGetTokenAsyncAction* UImtblPassportGetTokenAsyncAction::GetAccessT
+ {
+ 	UImtblPassportGetTokenAsyncAction* Node = NewObject<UImtblPassportGetTokenAsyncAction>();
+ 
+-	Node->WorldContextObject = WorldContextObject;
++	Node->RetainedWorldContextObject = WorldContextObject;
+ 	Node->Type = ACCESS;
+ 	
+ 	return Node;
+@@ -20,7 +20,7 @@ UImtblPassportGetTokenAsyncAction* UImtblPassportGetTokenAsyncAction::GetIdToken
+ {
+ 	UImtblPassportGetTokenAsyncAction* Node = NewObject<UImtblPassportGetTokenAsyncAction>();
+ 
+-	Node->WorldContextObject = WorldContextObject;
++	Node->RetainedWorldContextObject = WorldContextObject;
+ 	Node->Type = ID;
+ 
+ 	return Node;
+@@ -28,7 +28,8 @@ UImtblPassportGetTokenAsyncAction* UImtblPassportGetTokenAsyncAction::GetIdToken
+ 
+ void UImtblPassportGetTokenAsyncAction::Activate()
+ {
+-	if (!WorldContextObject || !WorldContextObject->GetWorld())
++	UImmutableSubsystem* Subsystem = GetSubsystem();
++	if (!Subsystem)
+ 	{
+ 		FString Err = "Get Token failed due to missing world or world context object.";
+ 		IMTBL_WARN("%s", *Err)
+@@ -37,7 +38,7 @@ void UImtblPassportGetTokenAsyncAction::Activate()
+ 	}
+ 
+ 	
+-	GetSubsystem()->WhenReady(this, &UImtblPassportGetTokenAsyncAction::DoGetToken);
++	Subsystem->WhenReady(this, &UImtblPassportGetTokenAsyncAction::DoGetToken);
+ }
+ 
+ void UImtblPassportGetTokenAsyncAction::DoGetToken(TWeakObjectPtr<UImtblJSConnector> JSConnector)
+diff --git a/Source/Immutable/Private/Immutable/Actions/ImtblPassportHasStoredCredentialsAsyncAction.cpp b/Source/Immutable/Private/Immutable/Actions/ImtblPassportHasStoredCredentialsAsyncAction.cpp
+index 25b790aac18d6a535c4f951b94b264c608c8aa7a..11614eb60208382763a6d6e20fbf0ddb25558292 100644
+--- a/Source/Immutable/Private/Immutable/Actions/ImtblPassportHasStoredCredentialsAsyncAction.cpp
++++ b/Source/Immutable/Private/Immutable/Actions/ImtblPassportHasStoredCredentialsAsyncAction.cpp
+@@ -9,14 +9,15 @@ UImtblPassportHasStoredCredentialsAsyncAction* UImtblPassportHasStoredCredential
+ {
+ 	UImtblPassportHasStoredCredentialsAsyncAction* PassportInitBlueprintNode = NewObject<UImtblPassportHasStoredCredentialsAsyncAction>();
+ 
+-	PassportInitBlueprintNode->WorldContextObject = WorldContextObject;
++	PassportInitBlueprintNode->RetainedWorldContextObject = WorldContextObject;
+ 
+ 	return PassportInitBlueprintNode;
+ }
+ 
+ void UImtblPassportHasStoredCredentialsAsyncAction::Activate()
+ {
+-	if (!WorldContextObject || !WorldContextObject->GetWorld())
++	UImmutableSubsystem* Subsystem = GetSubsystem();
++	if (!Subsystem)
+ 	{
+ 		FString Err = "HasStoredCredentials failed due to missing world or world context object.";
+ 		IMTBL_WARN("%s", *Err)
+@@ -24,7 +25,7 @@ void UImtblPassportHasStoredCredentialsAsyncAction::Activate()
+ 		return;
+ 	}
+ 
+-	GetSubsystem()->WhenReady(this, &UImtblPassportHasStoredCredentialsAsyncAction::DoHasStoredCredentials);
++	Subsystem->WhenReady(this, &UImtblPassportHasStoredCredentialsAsyncAction::DoHasStoredCredentials);
+ }
+ 
+ void UImtblPassportHasStoredCredentialsAsyncAction::DoHasStoredCredentials(TWeakObjectPtr<UImtblJSConnector> JSConnector)
+diff --git a/Source/Immutable/Private/Immutable/Actions/ImtblPassportInitializationAsyncAction.cpp b/Source/Immutable/Private/Immutable/Actions/ImtblPassportInitializationAsyncAction.cpp
+index 280e7a9df84eb25a59448d9826f00feaac997298..df60d138c0bd20e17eb6e2c1c15d44c5e076f303 100644
+--- a/Source/Immutable/Private/Immutable/Actions/ImtblPassportInitializationAsyncAction.cpp
++++ b/Source/Immutable/Private/Immutable/Actions/ImtblPassportInitializationAsyncAction.cpp
+@@ -14,7 +14,7 @@ UImtblPassportInitializationAsyncAction* UImtblPassportInitializationAsyncAction
+ 	PassportInitBlueprintNode->RedirectUri = RedirectUri;
+ 	PassportInitBlueprintNode->LogoutUri = LogoutUri;
+ 	PassportInitBlueprintNode->Environment = Environment;
+-	PassportInitBlueprintNode->WorldContextObject = WorldContextObject;
++	PassportInitBlueprintNode->RetainedWorldContextObject = WorldContextObject;
+ 	PassportInitBlueprintNode->IsSilentLogout = IsSilentLogout;
+ 
+ 	return PassportInitBlueprintNode;
+@@ -22,13 +22,14 @@ UImtblPassportInitializationAsyncAction* UImtblPassportInitializationAsyncAction
+ 
+ void UImtblPassportInitializationAsyncAction::Activate()
+ {
+-	if (!WorldContextObject || !WorldContextObject->GetWorld())
++	UImmutableSubsystem* Subsystem = GetSubsystem();
++	if (!Subsystem)
+ 	{
+ 		Failed.Broadcast("Initialization failed due to missing world or world context object.");
+ 		return;
+ 	}
+ 
+-	GetSubsystem()->WhenReady(this, &UImtblPassportInitializationAsyncAction::DoInit);
++	Subsystem->WhenReady(this, &UImtblPassportInitializationAsyncAction::DoInit);
+ }
+ 
+ void UImtblPassportInitializationAsyncAction::DoInit(TWeakObjectPtr<UImtblJSConnector> JSConnector)
+diff --git a/Source/Immutable/Private/Immutable/Actions/ImtblPassportLogoutAsyncAction.cpp b/Source/Immutable/Private/Immutable/Actions/ImtblPassportLogoutAsyncAction.cpp
+index 9ced8e5ee25ea71df5aced3d3cdba589f3841e96..7842c688e7ccbf58556fc4f331ebd3f0fd0b6bae 100644
+--- a/Source/Immutable/Private/Immutable/Actions/ImtblPassportLogoutAsyncAction.cpp
++++ b/Source/Immutable/Private/Immutable/Actions/ImtblPassportLogoutAsyncAction.cpp
+@@ -10,7 +10,7 @@ UImtblPassportLogoutAsyncAction* UImtblPassportLogoutAsyncAction::Logout(UObject
+ {
+ 	UImtblPassportLogoutAsyncAction* PassportInitBlueprintNode = NewObject<UImtblPassportLogoutAsyncAction>();
+ 
+-	PassportInitBlueprintNode->WorldContextObject = WorldContextObject;
++	PassportInitBlueprintNode->RetainedWorldContextObject = WorldContextObject;
+ 	PassportInitBlueprintNode->bDoHardLogout = DoHardLogout;
+ 
+ 	return PassportInitBlueprintNode;
+@@ -18,7 +18,8 @@ UImtblPassportLogoutAsyncAction* UImtblPassportLogoutAsyncAction::Logout(UObject
+ 
+ void UImtblPassportLogoutAsyncAction::Activate()
+ {
+-	if (!WorldContextObject || !WorldContextObject->GetWorld())
++	UImmutableSubsystem* Subsystem = GetSubsystem();
++	if (!Subsystem)
+ 	{
+ 		const FString ErrorMessage = "Logout failed due to missing world or world context object.";
+ 		
+@@ -28,7 +29,7 @@ void UImtblPassportLogoutAsyncAction::Activate()
+ 		return;
+ 	}
+ 
+-	GetSubsystem()->WhenReady(this, &UImtblPassportLogoutAsyncAction::DoLogout);
++	Subsystem->WhenReady(this, &UImtblPassportLogoutAsyncAction::DoLogout);
+ }
+ 
+ void UImtblPassportLogoutAsyncAction::DoLogout(TWeakObjectPtr<UImtblJSConnector> JSConnector)
+diff --git a/Source/Immutable/Private/Immutable/Actions/ImtblPassportZkEvmGetBalanceAsyncAction.cpp b/Source/Immutable/Private/Immutable/Actions/ImtblPassportZkEvmGetBalanceAsyncAction.cpp
+index cc6ecbb973cad89d2d63b9a6b533ec886eb531ca..6c47601870632446e1c70b5f61d64d45341de7b7 100644
+--- a/Source/Immutable/Private/Immutable/Actions/ImtblPassportZkEvmGetBalanceAsyncAction.cpp
++++ b/Source/Immutable/Private/Immutable/Actions/ImtblPassportZkEvmGetBalanceAsyncAction.cpp
+@@ -9,7 +9,7 @@
+ UImtblPassportZkEvmGetBalanceAsyncAction* UImtblPassportZkEvmGetBalanceAsyncAction::ZkEvmGetBalance(UObject* WorldContextObject, const FString& Address, const FString& BlockNumberOrTag)
+ {
+ 	UImtblPassportZkEvmGetBalanceAsyncAction* PassportInitBlueprintNode = NewObject<UImtblPassportZkEvmGetBalanceAsyncAction>();
+-	PassportInitBlueprintNode->WorldContextObject = WorldContextObject;
++	PassportInitBlueprintNode->RetainedWorldContextObject = WorldContextObject;
+ 	PassportInitBlueprintNode->Address = Address;
+ 	PassportInitBlueprintNode->BlockNumberOrTag = BlockNumberOrTag;
+ 	return PassportInitBlueprintNode;
+@@ -17,7 +17,8 @@ UImtblPassportZkEvmGetBalanceAsyncAction* UImtblPassportZkEvmGetBalanceAsyncActi
+ 
+ void UImtblPassportZkEvmGetBalanceAsyncAction::Activate()
+ {
+-	if (!WorldContextObject || !WorldContextObject->GetWorld())
++	UImmutableSubsystem* Subsystem = GetSubsystem();
++	if (!Subsystem)
+ 	{
+ 		FString Err = "ZkEvmGetBalance failed due to missing world or world context object.";
+ 		IMTBL_WARN("%s", *Err)
+@@ -25,7 +26,7 @@ void UImtblPassportZkEvmGetBalanceAsyncAction::Activate()
+ 		return;
+ 	}
+ 
+-	GetSubsystem()->WhenReady(this, &UImtblPassportZkEvmGetBalanceAsyncAction::DoZkEvmGetBalance);
++	Subsystem->WhenReady(this, &UImtblPassportZkEvmGetBalanceAsyncAction::DoZkEvmGetBalance);
+ }
+ 
+ void UImtblPassportZkEvmGetBalanceAsyncAction::DoZkEvmGetBalance(TWeakObjectPtr<UImtblJSConnector> JSConnector)
+diff --git a/Source/Immutable/Private/Immutable/Actions/ImtblPassportZkEvmGetTransactionReceiptAA.cpp b/Source/Immutable/Private/Immutable/Actions/ImtblPassportZkEvmGetTransactionReceiptAA.cpp
+index 563c62cd92a9538d0ad9545215ab8c1c39d61b24..ee65f5e2c080213b092dc5b9268246ba8aefa9af 100644
+--- a/Source/Immutable/Private/Immutable/Actions/ImtblPassportZkEvmGetTransactionReceiptAA.cpp
++++ b/Source/Immutable/Private/Immutable/Actions/ImtblPassportZkEvmGetTransactionReceiptAA.cpp
+@@ -10,7 +10,7 @@ UImtblPassportZkEvmGetTransactionReceiptAA* UImtblPassportZkEvmGetTransactionRec
+ {
+ 	UImtblPassportZkEvmGetTransactionReceiptAA* PassportZkEvmSendTransactionBlueprintNode = NewObject<UImtblPassportZkEvmGetTransactionReceiptAA>();
+ 	
+-	PassportZkEvmSendTransactionBlueprintNode->WorldContextObject = WorldContextObject;
++	PassportZkEvmSendTransactionBlueprintNode->RetainedWorldContextObject = WorldContextObject;
+ 	PassportZkEvmSendTransactionBlueprintNode->Hash = Hash;
+ 	
+ 	return PassportZkEvmSendTransactionBlueprintNode;
+@@ -18,7 +18,8 @@ UImtblPassportZkEvmGetTransactionReceiptAA* UImtblPassportZkEvmGetTransactionRec
+ 
+ void UImtblPassportZkEvmGetTransactionReceiptAA::Activate()
+ {
+-	if (!WorldContextObject || !WorldContextObject->GetWorld())
++	UImmutableSubsystem* Subsystem = GetSubsystem();
++	if (!Subsystem)
+ 	{
+ 		const FString ErrorMessage = "zkEVM Transaction Receipt failed due to missing world context object.";
+ 		IMTBL_WARN("%s", *ErrorMessage)
+@@ -26,7 +27,7 @@ void UImtblPassportZkEvmGetTransactionReceiptAA::Activate()
+ 		return;
+ 	}
+ 
+-	GetSubsystem()->WhenReady(this, &UImtblPassportZkEvmGetTransactionReceiptAA::DoZkEvmGetTransactionReceipt);
++	Subsystem->WhenReady(this, &UImtblPassportZkEvmGetTransactionReceiptAA::DoZkEvmGetTransactionReceipt);
+ }
+ 
+ void UImtblPassportZkEvmGetTransactionReceiptAA::DoZkEvmGetTransactionReceipt(TWeakObjectPtr<UImtblJSConnector> JSConnector)
+diff --git a/Source/Immutable/Private/Immutable/Actions/ImtblPassportZkEvmRequestAccountsAsyncAction.cpp b/Source/Immutable/Private/Immutable/Actions/ImtblPassportZkEvmRequestAccountsAsyncAction.cpp
+index a6ebd02614647848c32d0a45e9b67025849d88cd..e7c3e5f629d027092aa390c43f1fb19021e94c2c 100644
+--- a/Source/Immutable/Private/Immutable/Actions/ImtblPassportZkEvmRequestAccountsAsyncAction.cpp
++++ b/Source/Immutable/Private/Immutable/Actions/ImtblPassportZkEvmRequestAccountsAsyncAction.cpp
+@@ -9,13 +9,14 @@
+ UImtblPassportZkEvmRequestAccountsAsyncAction* UImtblPassportZkEvmRequestAccountsAsyncAction::RequestAccounts(UObject* WorldContextObject)
+ {
+ 	UImtblPassportZkEvmRequestAccountsAsyncAction* PassportInitBlueprintNode = NewObject<UImtblPassportZkEvmRequestAccountsAsyncAction>();
+-	PassportInitBlueprintNode->WorldContextObject = WorldContextObject;
++	PassportInitBlueprintNode->RetainedWorldContextObject = WorldContextObject;
+ 	return PassportInitBlueprintNode;
+ }
+ 
+ void UImtblPassportZkEvmRequestAccountsAsyncAction::Activate()
+ {
+-	if (!WorldContextObject || !WorldContextObject->GetWorld())
++	UImmutableSubsystem* Subsystem = GetSubsystem();
++	if (!Subsystem)
+ 	{
+ 		FString Err = "ZkEvmRequestAccounts failed due to missing world or world " "context object.";
+ 		IMTBL_WARN("%s", *Err)
+@@ -24,7 +25,7 @@ void UImtblPassportZkEvmRequestAccountsAsyncAction::Activate()
+ 		return;
+ 	}
+ 
+-	GetSubsystem()->WhenReady(this, &UImtblPassportZkEvmRequestAccountsAsyncAction::DoRequestAccounts);
++	Subsystem->WhenReady(this, &UImtblPassportZkEvmRequestAccountsAsyncAction::DoRequestAccounts);
+ }
+ 
+ void UImtblPassportZkEvmRequestAccountsAsyncAction::DoRequestAccounts(TWeakObjectPtr<UImtblJSConnector> JSConnector)
+diff --git a/Source/Immutable/Private/Immutable/Actions/ImtblPassportZkEvmSendTransactionAsyncAction.cpp b/Source/Immutable/Private/Immutable/Actions/ImtblPassportZkEvmSendTransactionAsyncAction.cpp
+index c16e67674fd8c96cc0f4a693fc8a9cee5b3efb5d..4f9ebac06f649f5105a6921cad9ae114244c93b8 100644
+--- a/Source/Immutable/Private/Immutable/Actions/ImtblPassportZkEvmSendTransactionAsyncAction.cpp
++++ b/Source/Immutable/Private/Immutable/Actions/ImtblPassportZkEvmSendTransactionAsyncAction.cpp
+@@ -9,14 +9,15 @@
+ UImtblPassportZkEvmSendTransactionAsyncAction* UImtblPassportZkEvmSendTransactionAsyncAction::ZkEvmSendTransaction(UObject* WorldContextObject, const FImtblTransactionRequest& Request)
+ {
+ 	UImtblPassportZkEvmSendTransactionAsyncAction* PassportZkEvmSendTransactionBlueprintNode = NewObject<UImtblPassportZkEvmSendTransactionAsyncAction>();
+-	PassportZkEvmSendTransactionBlueprintNode->WorldContextObject = WorldContextObject;
++	PassportZkEvmSendTransactionBlueprintNode->RetainedWorldContextObject = WorldContextObject;
+ 	PassportZkEvmSendTransactionBlueprintNode->TransactionRequest = Request;
+ 	return PassportZkEvmSendTransactionBlueprintNode;
+ }
+ 
+ void UImtblPassportZkEvmSendTransactionAsyncAction::Activate()
+ {
+-	if (!WorldContextObject || !WorldContextObject->GetWorld())
++	UImmutableSubsystem* Subsystem = GetSubsystem();
++	if (!Subsystem)
+ 	{
+ 		FString Err = "zkEVM Send Transaction failed due to missing world or world " "context object.";
+ 		IMTBL_WARN("%s", *Err)
+@@ -24,7 +25,7 @@ void UImtblPassportZkEvmSendTransactionAsyncAction::Activate()
+ 		return;
+ 	}
+ 
+-	GetSubsystem()->WhenReady(this, &UImtblPassportZkEvmSendTransactionAsyncAction::DoZkEvmSendTransaction);
++	Subsystem->WhenReady(this, &UImtblPassportZkEvmSendTransactionAsyncAction::DoZkEvmSendTransaction);
+ }
+ 
+ void UImtblPassportZkEvmSendTransactionAsyncAction::DoZkEvmSendTransaction(TWeakObjectPtr<UImtblJSConnector> JSConnector)
+@@ -56,7 +57,7 @@ UImtblPassportZkEvmSendTransactionWithConfirmationAA* UImtblPassportZkEvmSendTra
+ {
+ 	UImtblPassportZkEvmSendTransactionWithConfirmationAA* ZkEvmSendTransactionWithConfirmationBPNode = NewObject<UImtblPassportZkEvmSendTransactionWithConfirmationAA>();
+ 	
+-	ZkEvmSendTransactionWithConfirmationBPNode->WorldContextObject = WorldContextObject;
++	ZkEvmSendTransactionWithConfirmationBPNode->RetainedWorldContextObject = WorldContextObject;
+ 	ZkEvmSendTransactionWithConfirmationBPNode->TransactionRequest = Request;
+ 	
+ 	return ZkEvmSendTransactionWithConfirmationBPNode;
+@@ -64,7 +65,8 @@ UImtblPassportZkEvmSendTransactionWithConfirmationAA* UImtblPassportZkEvmSendTra
+ 
+ void UImtblPassportZkEvmSendTransactionWithConfirmationAA::Activate()
+ {
+-	if (!WorldContextObject || !WorldContextObject->GetWorld())
++	UImmutableSubsystem* Subsystem = GetSubsystem();
++	if (!Subsystem)
+ 	{
+ 		FString Err = "zkEVM Send Transaction with confirmation failed due to missing world context object.";
+ 
+@@ -74,7 +76,7 @@ void UImtblPassportZkEvmSendTransactionWithConfirmationAA::Activate()
+ 		return;
+ 	}
+ 
+-	GetSubsystem()->WhenReady(this, &UImtblPassportZkEvmSendTransactionWithConfirmationAA::DoZkEvmSendTransactionWithConfirmation);
++	Subsystem->WhenReady(this, &UImtblPassportZkEvmSendTransactionWithConfirmationAA::DoZkEvmSendTransactionWithConfirmation);
+ }
+ 
+ void UImtblPassportZkEvmSendTransactionWithConfirmationAA::DoZkEvmSendTransactionWithConfirmation(TWeakObjectPtr<UImtblJSConnector> JSConnector)
+diff --git a/Source/Immutable/Private/Immutable/Actions/ImtblPassportZkEvmSignTypedDataV4AsyncAction.cpp b/Source/Immutable/Private/Immutable/Actions/ImtblPassportZkEvmSignTypedDataV4AsyncAction.cpp
+index 67f79b30d61caa153dac797315d2e52418724ced..e0c99dba4c6fc9f4ba9c956d00b73230a0ddaafd 100644
+--- a/Source/Immutable/Private/Immutable/Actions/ImtblPassportZkEvmSignTypedDataV4AsyncAction.cpp
++++ b/Source/Immutable/Private/Immutable/Actions/ImtblPassportZkEvmSignTypedDataV4AsyncAction.cpp
+@@ -9,7 +9,7 @@ UImtblPassportZkEvmSignTypedDataV4AsyncAction* UImtblPassportZkEvmSignTypedDataV
+ {
+ 	UImtblPassportZkEvmSignTypedDataV4AsyncAction* PassportZkEvmSignTypedDataV4BlueprintNode = NewObject<UImtblPassportZkEvmSignTypedDataV4AsyncAction>();
+ 	
+-	PassportZkEvmSignTypedDataV4BlueprintNode->WorldContextObject = WorldContextObject;
++	PassportZkEvmSignTypedDataV4BlueprintNode->RetainedWorldContextObject = WorldContextObject;
+ 	PassportZkEvmSignTypedDataV4BlueprintNode->JsonStringSignRequest = JsonStringRequest;
+ 
+ 	return PassportZkEvmSignTypedDataV4BlueprintNode;
+@@ -17,7 +17,8 @@ UImtblPassportZkEvmSignTypedDataV4AsyncAction* UImtblPassportZkEvmSignTypedDataV
+ 
+ void UImtblPassportZkEvmSignTypedDataV4AsyncAction::Activate()
+ {
+-	if (!WorldContextObject || !WorldContextObject->GetWorld())
++	UImmutableSubsystem* Subsystem = GetSubsystem();
++	if (!Subsystem)
+ 	{
+ 		FString Err = "zkEVM Sign Typed Data V4 failed due to missing world or world " "context object.";
+ 		IMTBL_WARN("%s", *Err)
+@@ -25,7 +26,7 @@ void UImtblPassportZkEvmSignTypedDataV4AsyncAction::Activate()
+ 		return;
+ 	}
+ 
+-	GetSubsystem()->WhenReady(this, &UImtblPassportZkEvmSignTypedDataV4AsyncAction::DoZkEvmSignTypedDataV4);
++	Subsystem->WhenReady(this, &UImtblPassportZkEvmSignTypedDataV4AsyncAction::DoZkEvmSignTypedDataV4);
+ }
+ 
+ void UImtblPassportZkEvmSignTypedDataV4AsyncAction::DoZkEvmSignTypedDataV4(TWeakObjectPtr<UImtblJSConnector> JSConnector)
+diff --git a/Source/Immutable/Private/Immutable/Browser/ImmutableBaseBrowserWidget.cpp b/Source/Immutable/Private/Immutable/Browser/ImmutableBaseBrowserWidget.cpp
+index 67478492525f2457e09cb338d13940f54186da53..67eb3af7f8e2b42454b29c9d15a9dd5aa740248e 100644
+--- a/Source/Immutable/Private/Immutable/Browser/ImmutableBaseBrowserWidget.cpp
++++ b/Source/Immutable/Private/Immutable/Browser/ImmutableBaseBrowserWidget.cpp
+@@ -1,9 +1,144 @@
+ #include "Immutable/Browser/ImmutableBaseBrowserWidget.h"
+ 
++#include "Engine/GameInstance.h"
++#include "Engine/World.h"
+ #include "Immutable/Misc/ImtblLogging.h"
++#include "Misc/ConfigCacheIni.h"
++#include "Misc/Paths.h"
++
++#if USING_BUNDLED_CEF
++#include "SWebBrowser.h"
++#include "SWebBrowserView.h"
++#include "WebBrowserModule.h"
++#if WITH_CEF3
++#if PLATFORM_WINDOWS
++#include "Windows/AllowWindowsPlatformTypes.h"
++#endif
++#pragma push_macro("OVERRIDE")
++#undef OVERRIDE
++THIRD_PARTY_INCLUDES_START
++#include "include/cef_request_context.h"
++#include "include/cef_version.h"
++THIRD_PARTY_INCLUDES_END
++#pragma pop_macro("OVERRIDE")
++#if PLATFORM_WINDOWS
++#include "Windows/HideWindowsPlatformTypes.h"
++#endif
++#endif
++#endif
+ 
+ #define LOCTEXT_NAMESPACE "BaseBrowserWidget"
+ 
++namespace
++{
++#if USING_BUNDLED_CEF
++bool IsExplicitCEFRootCachePathEnabled()
++{
++	bool bEnabled = false;
++	if (GConfig)
++	{
++		GConfig->GetBool(TEXT("Browser"), TEXT("bUseExplicitCEFRootCachePath"), bEnabled, GEngineIni);
++	}
++	return bEnabled;
++}
++
++const ANSICHAR* GetCompileTimeCefVersion()
++{
++#if WITH_CEF3 && defined(CEF_VERSION)
++	return CEF_VERSION;
++#else
++	return "unknown";
++#endif
++}
++
++int32 GetCompileTimeChromeVersionMajor()
++{
++#if WITH_CEF3 && defined(CHROME_VERSION_MAJOR)
++	return CHROME_VERSION_MAJOR;
++#else
++	return 0;
++#endif
++}
++
++int32 GetCompileTimeChromeVersionMinor()
++{
++#if WITH_CEF3 && defined(CHROME_VERSION_MINOR)
++	return CHROME_VERSION_MINOR;
++#else
++	return 0;
++#endif
++}
++
++int32 GetCompileTimeChromeVersionBuild()
++{
++#if WITH_CEF3 && defined(CHROME_VERSION_BUILD)
++	return CHROME_VERSION_BUILD;
++#else
++	return 0;
++#endif
++}
++
++int32 GetCompileTimeChromeVersionPatch()
++{
++#if WITH_CEF3 && defined(CHROME_VERSION_PATCH)
++	return CHROME_VERSION_PATCH;
++#else
++	return 0;
++#endif
++}
++
++const TCHAR* GetCefBranchName()
++{
++#if WITH_CEF3 && defined(CEF3_USE_EXPERIMENTAL_VERSION)
++	return CEF3_USE_EXPERIMENTAL_VERSION ? TEXT("experimental") : TEXT("legacy");
++#elif WITH_CEF3
++	return TEXT("unknown-cef3");
++#else
++	return TEXT("no-cef3");
++#endif
++}
++
++FString GetGlobalCefProfilePath()
++{
++#if WITH_CEF3
++	IWebBrowserModule::Get().GetSingleton();
++	const CefRefPtr<CefRequestContext> GlobalContext = CefRequestContext::GetGlobalContext();
++	if (GlobalContext)
++	{
++		const FString ProfilePath = WCHAR_TO_TCHAR(GlobalContext->GetCachePath().ToWString().c_str());
++		return ProfilePath.IsEmpty() ? TEXT("<in-memory>") : FPaths::ConvertRelativePathToFull(ProfilePath);
++	}
++#endif
++	return TEXT("<unavailable>");
++}
++#endif
++
++#if ENGINE_MAJOR_VERSION == 5 && ENGINE_MINOR_VERSION >= 1
++const TCHAR* GetConsoleLogSeverityName(const EWebBrowserConsoleLogSeverity Severity)
++{
++	switch (Severity)
++	{
++		case EWebBrowserConsoleLogSeverity::Default:
++			return TEXT("Default");
++		case EWebBrowserConsoleLogSeverity::Verbose:
++			return TEXT("Verbose");
++		case EWebBrowserConsoleLogSeverity::Debug:
++			return TEXT("Debug");
++		case EWebBrowserConsoleLogSeverity::Info:
++			return TEXT("Info");
++		case EWebBrowserConsoleLogSeverity::Warning:
++			return TEXT("Warning");
++		case EWebBrowserConsoleLogSeverity::Error:
++			return TEXT("Error");
++		case EWebBrowserConsoleLogSeverity::Fatal:
++			return TEXT("Fatal");
++		default:
++			return TEXT("Unknown");
++	}
++}
++#endif
++} // namespace
++
+ void UImmutableBaseBrowserWidget::ReleaseSlateResources(bool bReleaseChildren)
+ {
+ 	Super::ReleaseSlateResources(bReleaseChildren);
+@@ -17,8 +152,9 @@ bool UImmutableBaseBrowserWidget::IsPageLoaded() const
+ {
+ #if USING_BUNDLED_CEF
+ 	return WebBrowserWidget.IsValid() && WebBrowserWidget->IsLoaded();
+-#endif
++#else
+ 	return false;
++#endif
+ }
+ 
+ FString UImmutableBaseBrowserWidget::GetUrl() const
+@@ -83,19 +219,56 @@ TSharedRef<SWidget> UImmutableBaseBrowserWidget::RebuildWidget()
+ 	else
+ 	{
+ #if USING_BUNDLED_CEF
+-		// Create the web browser widget
++		// Every PIE user receives a stable one-based context. Empty storage keeps stock Unreal contexts isolated in memory.
++#if WITH_EDITOR
++		const int32 PIEInstanceIndex = GetWorldUserIndex();
++		const int32 BrowserProfileIndex = PIEInstanceIndex + 1;
++		const FString ContextId = FString::Printf(TEXT("ImmutablePassportPIEUser%d"), BrowserProfileIndex);
++		TOptional<FBrowserContextSettings> BrowserContextSettings;
++		BrowserContextSettings.Emplace(ContextId);
++
++		const FString GlobalProfilePath = GetGlobalCefProfilePath();
++		const FString CEFRootPath = FPaths::GetPath(GlobalProfilePath);
++		const bool bHasUsableRoot = IsExplicitCEFRootCachePathEnabled()
++			&& FPaths::GetCleanFilename(GlobalProfilePath).Equals(TEXT("Default"), ESearchCase::IgnoreCase)
++			&& !CEFRootPath.IsEmpty() && !FPaths::IsRelative(CEFRootPath);
++		if (bHasUsableRoot)
++		{
++			BrowserContextSettings->CookieStorageLocation = FPaths::Combine(CEFRootPath, ContextId);
++			IMTBL_LOG_FUNC(
++				"Editor browser using persistent isolated CEF profile; ContextId=%s, GlobalProfile=%s, RequestedProfile=%s, "
++				"CEFVersion=%hs, ChromeVersion=%d.%d.%d.%d, CEFBranch=%s, PIEInstanceIndex=%d, BrowserProfileIndex=%d",
++				*ContextId, *GlobalProfilePath, *BrowserContextSettings->CookieStorageLocation, GetCompileTimeCefVersion(),
++				GetCompileTimeChromeVersionMajor(), GetCompileTimeChromeVersionMinor(), GetCompileTimeChromeVersionBuild(),
++				GetCompileTimeChromeVersionPatch(), GetCefBranchName(), PIEInstanceIndex, BrowserProfileIndex)
++		}
++		else
++		{
++			IMTBL_WARN_FUNC(
++				"Editor browser using isolated in-memory CEF profile; ContextId=%s, GlobalProfile=%s, PIEInstanceIndex=%d, "
++				"BrowserProfileIndex=%d",
++				*ContextId, *GlobalProfilePath, PIEInstanceIndex, BrowserProfileIndex)
++		}
++
++		WebBrowserWidget = SNew(SWebBrowserView)
++			.InitialURL(InitialURL)
++			.SupportsTransparency(bSupportsTransparency)
++			.ContextSettings(BrowserContextSettings)
++			.OnConsoleMessage(BIND_UOBJECT_DELEGATE(FOnConsoleMessageDelegate, HandleOnConsoleMessage));
++#else
+ 		WebBrowserWidget = SNew(SWebBrowser)
+-				.InitialURL(InitialURL)
+-				.ShowControls(false)
+-				.SupportsTransparency(bSupportsTransparency)
+-				.ShowInitialThrobber(bShowInitialThrobber)
++			.InitialURL(InitialURL)
++			.ShowControls(false)
++			.SupportsTransparency(bSupportsTransparency)
++			.ShowInitialThrobber(bShowInitialThrobber)
+ #if PLATFORM_ANDROID || PLATFORM_IOS
+ 			.OnLoadCompleted(BIND_UOBJECT_DELEGATE(FSimpleDelegate, HandleOnLoadCompleted))
+ #endif
+ #if ENGINE_MAJOR_VERSION == 5 && ENGINE_MINOR_VERSION >= 1
+-				.OnConsoleMessage(BIND_UOBJECT_DELEGATE(FOnConsoleMessageDelegate, HandleOnConsoleMessage))
++			.OnConsoleMessage(BIND_UOBJECT_DELEGATE(FOnConsoleMessageDelegate, HandleOnConsoleMessage))
+ #endif
+ 			;
++#endif
+ 
+ 		return WebBrowserWidget.ToSharedRef();
+ #else
+@@ -130,7 +303,27 @@ void UImmutableBaseBrowserWidget::HandleOnLoadCompleted()
+ #if ENGINE_MAJOR_VERSION == 5 && ENGINE_MINOR_VERSION >= 1
+ void UImmutableBaseBrowserWidget::HandleOnConsoleMessage(const FString& Message, const FString& Source, int32 Line, EWebBrowserConsoleLogSeverity Severity)
+ {
+-	UE_LOG(LogImmutable, Log, TEXT("Browser console message: %s, Source: %s, Line: %d, Severity: %d"), *Message, *Source, Line, Severity);
++	const TCHAR* SeverityName = GetConsoleLogSeverityName(Severity);
++	switch (Severity)
++	{
++		case EWebBrowserConsoleLogSeverity::Fatal:
++			// Browser Fatal describes JavaScript severity; Unreal Fatal would terminate the process.
++		case EWebBrowserConsoleLogSeverity::Error:
++			IMTBL_ERR("Browser console message [%s]: %s, Source: %s, Line: %d", SeverityName, *Message, *Source, Line)
++			break;
++		case EWebBrowserConsoleLogSeverity::Warning:
++			IMTBL_WARN("Browser console message [%s]: %s, Source: %s, Line: %d", SeverityName, *Message, *Source, Line)
++			break;
++		case EWebBrowserConsoleLogSeverity::Verbose:
++		case EWebBrowserConsoleLogSeverity::Debug:
++			IMTBL_VERBOSE("Browser console message [%s]: %s, Source: %s, Line: %d", SeverityName, *Message, *Source, Line)
++			break;
++		case EWebBrowserConsoleLogSeverity::Default:
++		case EWebBrowserConsoleLogSeverity::Info:
++		default:
++			IMTBL_LOG("Browser console message [%s]: %s, Source: %s, Line: %d", SeverityName, *Message, *Source, Line)
++			break;
++	}
+ 	HandleConsoleMessage(Message, Source, Line, static_cast<int32>(Severity));
+ }
+ #endif
+@@ -150,4 +343,21 @@ void UImmutableBaseBrowserWidget::OnBrowserCreated()
+ 	Internal_MulticastDelegate_OnBrowserCreated.Broadcast();
+ }
+ 
+-#undef LOCTEXT_NAMESPACE
+\ No newline at end of file
++int32 UImmutableBaseBrowserWidget::GetWorldUserIndex() const
++{
++#if WITH_EDITOR
++	if (const UWorld* World = GetWorld())
++	{
++		if (const UGameInstance* GameInstance = World->GetGameInstance())
++		{
++			if (const FWorldContext* WorldContext = GameInstance->GetWorldContext())
++			{
++				return WorldContext->PIEInstance == INDEX_NONE ? 0 : WorldContext->PIEInstance;
++			}
++		}
++	}
++#endif
++	return 0;
++}
++
++#undef LOCTEXT_NAMESPACE
+diff --git a/Source/Immutable/Private/Immutable/Browser/ImmutableJSConnectorBrowserWidget.cpp b/Source/Immutable/Private/Immutable/Browser/ImmutableJSConnectorBrowserWidget.cpp
+index 23d0adeec1d2ec84a4c938ecc308faef36e1254e..95cede3b324a8e23d232c8921f6b15b1021fce0a 100644
+--- a/Source/Immutable/Private/Immutable/Browser/ImmutableJSConnectorBrowserWidget.cpp
++++ b/Source/Immutable/Private/Immutable/Browser/ImmutableJSConnectorBrowserWidget.cpp
+@@ -1,6 +1,107 @@
+ ﻿#include "Immutable/Browser/ImmutableJSConnectorBrowserWidget.h"
+ 
+ #include "Immutable/ImtblJSConnector.h"
++#include "Immutable/ImmutableUtilities.h"
++#include "Immutable/Misc/ImtblLogging.h"
++
++#if USING_BUNDLED_CEF && WITH_CEF3
++#if PLATFORM_WINDOWS
++#include "Windows/AllowWindowsPlatformTypes.h"
++#endif
++#pragma push_macro("OVERRIDE")
++#undef OVERRIDE
++THIRD_PARTY_INCLUDES_START
++#include "include/cef_version.h"
++THIRD_PARTY_INCLUDES_END
++#pragma pop_macro("OVERRIDE")
++#if PLATFORM_WINDOWS
++#include "Windows/HideWindowsPlatformTypes.h"
++#endif
++#endif
++
++namespace
++{
++const TCHAR* ImmutableBridgeUrl = TEXT("file:///immutable/index.html");
++
++const TCHAR* ImmutableCefBindingShim = TEXT(R"JS(
++(function() {
++	if (window.__immutableUeConnectorShimInstalled) {
++		return;
++	}
++
++	window.__immutableUeConnectorShimInstalled = true;
++	window.ue = window.ue || {};
++
++	var queuedMessages = [];
++	var maxQueuedMessages = 256;
++	var proxyConnector = {
++		sendtogame: function(message) {
++			if (queuedMessages.length >= maxQueuedMessages) {
++				queuedMessages.shift();
++				console.error("[ImmutableBridgeDebug] Unreal JSConnector queue full; dropped oldest callback");
++			}
++			queuedMessages.push(message);
++			console.log("[ImmutableBridgeDebug] Unreal JSConnector pending; queuedCallbacks=" + queuedMessages.length);
++		}
++	};
++
++	if (!window.ue.jsconnector) {
++		window.ue.jsconnector = proxyConnector;
++	}
++
++	function getRealConnector() {
++		if (!window.ue || !window.ue.jsconnector || window.ue.jsconnector === proxyConnector) {
++			return null;
++		}
++		return window.ue.jsconnector;
++	}
++
++	function flushQueuedMessages() {
++		var connector = getRealConnector();
++		if (!connector || typeof connector.sendtogame !== "function") {
++			return false;
++		}
++
++		if (queuedMessages.length > 0) {
++			console.log("[ImmutableBridgeDebug] Unreal JSConnector ready; flushingCallbacks=" + queuedMessages.length);
++		}
++		while (queuedMessages.length > 0) {
++			connector.sendtogame(queuedMessages.shift());
++		}
++		return true;
++	}
++
++	var attempts = 0;
++	var pollHandle = setInterval(function() {
++		attempts++;
++		if (flushQueuedMessages() || attempts >= 200) {
++			clearInterval(pollHandle);
++			if (queuedMessages.length > 0) {
++				console.error("[ImmutableBridgeDebug] Unreal JSConnector not defined after wait; queuedCallbacks=" + queuedMessages.length);
++			}
++		}
++	}, 25);
++})();
++)JS");
++
++int32 GetCompileTimeChromeVersionMajor()
++{
++#if WITH_CEF3 && defined(CHROME_VERSION_MAJOR)
++	return CHROME_VERSION_MAJOR;
++#else
++	return 0;
++#endif
++}
++
++const ANSICHAR* GetCompileTimeCefVersion()
++{
++#if WITH_CEF3 && defined(CEF_VERSION)
++	return CEF_VERSION;
++#else
++	return "unknown";
++#endif
++}
++} // namespace
+ 
+ void UImmutableJSConnectorBrowserWidget::PostInitProperties()
+ {
+@@ -18,6 +119,27 @@ UImtblJSConnector* UImmutableJSConnectorBrowserWidget::GetJSConnector() const
+ 	return JSConnector;
+ }
+ 
++void UImmutableJSConnectorBrowserWidget::LoadGameBridge()
++{
++#if USING_BUNDLED_CEF
++	FString JavaScript;
++	if (!FImmutableUtilities::LoadGameBridge(JavaScript))
++	{
++		IMTBL_ERR_FUNC("Failed to load Immutable game bridge JavaScript")
++		return;
++	}
++
++	const bool bUseBindingShim = GetCompileTimeChromeVersionMajor() >= 128;
++	const FString IndexHtml = FString(
++		"<!doctype html><html lang='en'><head><meta charset='utf-8'><title>GameSDK Bridge</title><script>")
++		+ (bUseBindingShim ? FString(ImmutableCefBindingShim) : FString()) + JavaScript
++		+ FString("</script></head><body><h1>Bridge Running</h1></body></html>");
++	IMTBL_LOG_FUNC("Loading Immutable bridge; Url=%s, CEFVersion=%hs, ChromeMajor=%d, BindingShim=%d, JavaScriptLength=%d",
++		ImmutableBridgeUrl, GetCompileTimeCefVersion(), GetCompileTimeChromeVersionMajor(), bUseBindingShim, JavaScript.Len())
++	LoadString(IndexHtml, ImmutableBridgeUrl);
++#endif
++}
++
+ void UImmutableJSConnectorBrowserWidget::ExecuteJavaScript(const FString& ScriptText) const
+ {
+ #if USING_BUNDLED_CEF
+@@ -31,16 +153,22 @@ void UImmutableJSConnectorBrowserWidget::ExecuteJavaScript(const FString& Script
+ bool UImmutableJSConnectorBrowserWidget::BindUObject(const FString& Name, UObject* Object, bool bIsPermanent) const
+ {
+ #if USING_BUNDLED_CEF
+-	if (!WebBrowserWidget.IsValid() || !Object)
++	if (!WebBrowserWidget.IsValid())
++	{
++		IMTBL_WARN("Could not bind UObject because WebBrowserWidget is null")
++		return false;
++	}
++	if (!Object)
+ 	{
+-		UE_LOG(LogImmutable, Warning, TEXT("Could not bind UObject '%s' to browser, WebBrowserWidget is null"), *Object->GetName());
++		IMTBL_WARN("Could not bind null UObject to browser")
+ 		return false;
+ 	}
+ 
+ 	WebBrowserWidget->BindUObject(Name, Object, bIsPermanent);
+ 	return true;
+-#endif
++#else
+ 	return false;
++#endif
+ }
+ 
+ void UImmutableJSConnectorBrowserWidget::OnBrowserCreated()
+@@ -54,14 +182,21 @@ void UImmutableJSConnectorBrowserWidget::SetupJavaScriptBindings()
+ {
+ 	if (JSConnector && JSConnector->IsBound())
+ 	{
++		IMTBL_LOG_FUNC("JSConnector already bound; PageLoaded=%d", IsPageLoaded())
+ 		return;
+ 	}
+ 
+ 	if (JSConnector)
+ 	{
+-		if (BindUObject(UImtblJSConnector::JSObjectName(), JSConnector))
++		const bool bBindSucceeded = BindUObject(UImtblJSConnector::JSObjectName(), JSConnector);
++		IMTBL_LOG_FUNC("BindUObject result=%d; PageLoaded=%d", bBindSucceeded, IsPageLoaded())
++		if (bBindSucceeded)
+ 		{
+ 			JSConnector->Init(IsPageLoaded());
+ 		}
+ 	}
+-}
+\ No newline at end of file
++	else
++	{
++		IMTBL_ERR_FUNC("JSConnector is null")
++	}
++}
+diff --git a/Source/Immutable/Private/Immutable/ImmutablePassport.cpp b/Source/Immutable/Private/Immutable/ImmutablePassport.cpp
+index 5f4f6d471a13fd35e8ef909584e252a65cf8ae2d..27385e31f0f894a1134c230e2513dfd764bb600e 100644
+--- a/Source/Immutable/Private/Immutable/ImmutablePassport.cpp
++++ b/Source/Immutable/Private/Immutable/ImmutablePassport.cpp
+@@ -2,6 +2,8 @@
+ 
+ #include "Immutable/ImmutablePassport.h"
+ 
++#include "Engine/Engine.h"
++#include "Engine/GameInstance.h"
+ #include "ImmutableAnalytics.h"
+ #include "Immutable/Misc/ImtblLogging.h"
+ #include "Immutable/ImtblJSConnector.h"
+@@ -9,6 +11,7 @@
+ #include "Immutable/ImmutableSaveGame.h"
+ #include "Immutable/ImmutableSettings.h"
+ #include "Kismet/GameplayStatics.h"
++#include "Subsystems/GameInstanceSubsystem.h"
+ 
+ #if PLATFORM_ANDROID | PLATFORM_IOS | PLATFORM_MAC
+ #include "GenericPlatform/GenericPlatformHttp.h"
+@@ -29,6 +32,28 @@
+ 
+ #define PASSPORT_SAVE_GAME_SLOT_NAME TEXT("Immutable")
+ 
++namespace
++{
++FString GetResponseError(const FImtblJSResponse& Response, const FString& Fallback)
++{
++	if (Response.Error.IsSet())
++	{
++		const FString StructuredError = Response.Error->ToString();
++		if (!StructuredError.IsEmpty())
++		{
++			return StructuredError;
++		}
++	}
++
++	FString JsonError;
++	if (Response.JsonObject.IsValid())
++	{
++		Response.JsonObject->TryGetStringField(TEXT("error"), JsonError);
++	}
++	return JsonError.IsEmpty() ? Fallback : JsonError;
++}
++} // namespace
++
+ void UImmutablePassport::Initialize(const FImmutablePassportInitData& Data, const FImtblPassportResponseDelegate& ResponseDelegate)
+ {
+ 	check(JSConnector.IsValid());
+@@ -227,24 +252,22 @@ void UImmutablePassport::HasStoredCredentials(const FImtblPassportResponseDelega
+ 	// check access token
+ 	CallJS(ImmutablePassportAction::GetAccessToken, TEXT(""), ResponseDelegate, FImtblJSResponseDelegate::CreateLambda([this, ResponseDelegate](FImtblJSResponse Response)
+ 	{
+-		FString AccessToken;
+-
+-		Response.JsonObject->TryGetStringField(TEXT("result"), AccessToken);
++		const FString AccessToken = GetResponseResultAsString(Response);
+ 		if (!Response.success || AccessToken.IsEmpty())
+ 		{
+-			ResponseDelegate.ExecuteIfBound(FImmutablePassportResult{false, Response.JsonObject->HasField(TEXT("error")) ? Response.JsonObject->GetStringField(TEXT("error")) : "Failed to retrieve Access Token.", Response});
++			ResponseDelegate.ExecuteIfBound(FImmutablePassportResult{
++				false, GetResponseError(Response, TEXT("Failed to retrieve Access Token.")), Response});
+ 		}
+ 		else
+ 		{
+ 			// check for id token
+ 			CallJS(ImmutablePassportAction::GetIdToken, TEXT(""), ResponseDelegate, FImtblJSResponseDelegate::CreateLambda([ResponseDelegate](FImtblJSResponse Response)
+ 			{
+-				FString IdToken;
+-
+-				Response.JsonObject->TryGetStringField(TEXT("result"), IdToken);
++				const FString IdToken = GetResponseResultAsString(Response);
+ 				if (!Response.success || IdToken.IsEmpty())
+ 				{
+-					ResponseDelegate.ExecuteIfBound(FImmutablePassportResult{false, Response.JsonObject->HasField(TEXT("error")) ? Response.JsonObject->GetStringField(TEXT("error")) : "Failed to retrieve Id Token.", Response});
++					ResponseDelegate.ExecuteIfBound(FImmutablePassportResult{
++						false, GetResponseError(Response, TEXT("Failed to retrieve Id Token.")), Response});
+ 				}
+ 				else
+ 				{
+@@ -264,7 +287,9 @@ FString UImmutablePassport::GetResponseResultAsString(const FImtblJSResponse& Re
+ 		return "";	
+ 	}
+ 
+-	return Response.JsonObject->GetStringField(TEXT("result"));
++	FString Result;
++	Response.JsonObject->TryGetStringField(TEXT("result"), Result);
++	return Result;
+ }
+ 
+ bool UImmutablePassport::GetResponseResultAsBool(const FImtblJSResponse& Response)
+@@ -276,7 +301,9 @@ bool UImmutablePassport::GetResponseResultAsBool(const FImtblJSResponse& Respons
+ 		return false;	
+ 	}
+ 
+-	return Response.JsonObject->GetBoolField(TEXT("result"));
++	bool bResult = false;
++	Response.JsonObject->TryGetBoolField(TEXT("result"), bResult);
++	return bResult;
+ }
+ 
+ TArray<FString> UImmutablePassport::GetResponseResultAsStringArray(const FImtblJSResponse& Response)
+@@ -289,10 +316,19 @@ TArray<FString> UImmutablePassport::GetResponseResultAsStringArray(const FImtblJ
+ 	}
+ 	
+ 	TArray<FString> StringArray;
+-	
+-	for (const TSharedPtr<FJsonValue>& Value : Response.JsonObject->GetArrayField(TEXT("result")))
++	const TArray<TSharedPtr<FJsonValue>>* Values = nullptr;
++	if (!Response.JsonObject->TryGetArrayField(TEXT("result"), Values) || !Values)
+ 	{
+-		StringArray.Add(Value->AsString());
++		return StringArray;
++	}
++
++	for (const TSharedPtr<FJsonValue>& Value : *Values)
++	{
++		FString StringValue;
++		if (Value.IsValid() && Value->TryGetString(StringValue))
++		{
++			StringArray.Add(MoveTemp(StringValue));
++		}
+ 	}
+ 
+ 	return StringArray;
+@@ -345,7 +381,7 @@ TOptional<UImmutablePassport::FImtblPassportResponseDelegate> UImmutablePassport
+ 	FImtblPassportResponseDelegate ResponseDelegate;
+ 	if (!ResponseDelegates.RemoveAndCopyValue(Response.requestId, ResponseDelegate))
+ 	{
+-		IMTBL_WARN("Couldn't find delegate for %s response", *Response.responseFor)
++		IMTBL_WARN("Couldn't find delegate; Action=%s, RequestId=%s", *Response.responseFor, *Response.requestId)
+ 		return TOptional<FImtblPassportResponseDelegate>();
+ 	}
+ 	return ResponseDelegate;
+@@ -365,7 +401,7 @@ void UImmutablePassport::OnInitializeResponse(FImtblJSResponse Response)
+ 		else
+ 		{
+ 			IMTBL_ERR("Passport initialization failed.")
+-			Response.Error.IsSet() ? Error = Response.Error->ToString() : Error = Response.JsonObject->GetStringField(TEXT("error"));
++			Error = GetResponseError(Response, TEXT("Passport initialization failed."));
+ 		}
+ 		Analytics->Track(UImmutableAnalytics::EEventName::INIT_PASSPORT, Response.success);
+ 		ResponseDelegate->ExecuteIfBound(FImmutablePassportResult { Response.success, Error, Response });
+@@ -387,7 +423,7 @@ void UImmutablePassport::OnLogoutResponse(FImtblJSResponse Response)
+ 
+ 	if (!Response.success)
+ 	{
+-		Message = Response.Error.IsSet() ? Response.Error->ToString() : Response.JsonObject->GetStringField(TEXT("error"));
++		Message = GetResponseError(Response, TEXT("Passport logout failed."));
+ 
+ 		IMTBL_ERR("%s", *Message)
+ 		ResponseDelegate->ExecuteIfBound(FImmutablePassportResult{ Response.success, Message, Response });
+@@ -403,28 +439,9 @@ void UImmutablePassport::OnLogoutResponse(FImtblJSResponse Response)
+ 		return;
+ 	}
+ 
+-	auto Logout = [this](const FImtblJSResponse& Response)
+-	{
+-		TOptional<FImtblPassportResponseDelegate> ResponseDelegate = GetResponseDelegate(Response);
+-
+-		FString Url;
+-		Response.JsonObject->TryGetStringField(TEXT("result"), Url);
+-
+-		FString ErrorMessage;
+-		FPlatformProcess::LaunchURL(*Url, nullptr, &ErrorMessage);
+-
+-		if (ErrorMessage.Len())
+-		{
+-			ErrorMessage = "Failed to launch browser: " + ErrorMessage;
+-			IMTBL_ERR("%s", *ErrorMessage);
+-			ResponseDelegate->ExecuteIfBound(FImmutablePassportResult{false, ErrorMessage, Response});
+-		}
+-	};
+-
+ 	ResetStateFlags(IPS_HARDLOGOUT);
+ 
+-	FString Url;
+-	Response.JsonObject->TryGetStringField(TEXT("result"), Url);
++	const FString Url = GetResponseResultAsString(Response);
+ 
+ 	if (!Url.IsEmpty())
+ 	{
+@@ -436,7 +453,14 @@ void UImmutablePassport::OnLogoutResponse(FImtblJSResponse Response)
+ #elif PLATFORM_MAC
+ 		[[ImmutableMac instance] launchUrl:TCHAR_TO_ANSI(*Url) forRedirectUri:TCHAR_TO_ANSI(*InitData.logoutRedirectUri)];
+ #elif PLATFORM_WINDOWS
+-		Logout(Response);
++		FString ErrorMessage;
++		LaunchURL(Url, TEXT(""), ErrorMessage);
++		if (!ErrorMessage.IsEmpty())
++		{
++			ErrorMessage = "Failed to launch browser: " + ErrorMessage;
++			IMTBL_ERR("%s", *ErrorMessage)
++			ResponseDelegate->ExecuteIfBound(FImmutablePassportResult{false, ErrorMessage, Response});
++		}
+ #endif
+ 	}
+ 	else
+@@ -451,39 +475,40 @@ void UImmutablePassport::OnGetAuthUrlResponse(FImtblJSResponse Response)
+ {
+ 	if (PKCEResponseDelegate.IsBound())
+ 	{
+-		FString Msg;
+-		bool bSuccess = true;
+-
+-		if (!Response.success || !Response.JsonObject->HasTypedField<EJson::String>(TEXT("result")))
++		FString Msg = GetResponseResultAsString(Response);
++		if (!Response.success || Msg.IsEmpty())
+ 		{
+-			IMTBL_LOG("Could not get PKCE auth URL from Passport.");
++			const FString Error = GetResponseError(Response, TEXT("Could not get PKCE auth URL from Passport."));
++			IMTBL_ERR("Bridge request failed; Action=%s, RequestId=%s, Error=%s", *Response.responseFor, *Response.requestId, *Error)
++			PKCEResponseDelegate.ExecuteIfBound(FImmutablePassportResult{false, Error, Response});
++			PKCEResponseDelegate.Unbind();
++			ResetStateFlags(IPS_PKCE | IPS_CONNECTING);
++			return;
+ 		}
+-		else
+-		{
+-			// Handle deeplink calls
+-			OnHandleDeepLink.AddUObject(this, &UImmutablePassport::OnDeepLinkActivated);
+ 
+-			Msg = Response.JsonObject->GetStringField(TEXT("result")).Replace(TEXT(" "), TEXT("+"));
++		// Handle deeplink calls
++		OnHandleDeepLink.AddUObject(this, &UImmutablePassport::OnDeepLinkActivated);
++
++		Msg = Msg.Replace(TEXT(" "), TEXT("+"));
+ #if PLATFORM_ANDROID
+-			OnPKCEDismissed = FImtblPassportOnPKCEDismissedDelegate::CreateUObject(this, &UImmutablePassport::HandleOnLoginPKCEDismissed);
+-			LaunchAndroidUrl(Msg);
++		OnPKCEDismissed = FImtblPassportOnPKCEDismissedDelegate::CreateUObject(this, &UImmutablePassport::HandleOnLoginPKCEDismissed);
++		LaunchAndroidUrl(Msg);
+ #elif PLATFORM_IOS
+-			[[ImmutableIOS instance] launchUrl:TCHAR_TO_ANSI(*Msg)];
++		[[ImmutableIOS instance] launchUrl:TCHAR_TO_ANSI(*Msg)];
+ #elif PLATFORM_MAC
+-			[[ImmutableMac instance] launchUrl:TCHAR_TO_ANSI(*Msg) forRedirectUri:TCHAR_TO_ANSI(*InitData.redirectUri)];
++		[[ImmutableMac instance] launchUrl:TCHAR_TO_ANSI(*Msg) forRedirectUri:TCHAR_TO_ANSI(*InitData.redirectUri)];
+ #elif PLATFORM_WINDOWS
+-			FString ErrorMessage;
+-			FPlatformProcess::LaunchURL(*Msg, nullptr, &ErrorMessage);
+-			if (!ErrorMessage.IsEmpty())
+-			{
+-				ErrorMessage = "Failed to launch browser: " + ErrorMessage;
+-				IMTBL_ERR("%s", *ErrorMessage);
+-				PKCEResponseDelegate.ExecuteIfBound(FImmutablePassportResult{false, ErrorMessage});
+-				PKCEResponseDelegate.Unbind();
+-				ResetStateFlags(IPS_PKCE | IPS_CONNECTING);
+-			}
+-#endif
++		FString ErrorMessage;
++		LaunchURL(Msg, TEXT(""), ErrorMessage);
++		if (!ErrorMessage.IsEmpty())
++		{
++			ErrorMessage = "Failed to launch browser: " + ErrorMessage;
++			IMTBL_ERR("%s", *ErrorMessage);
++			PKCEResponseDelegate.ExecuteIfBound(FImmutablePassportResult{false, ErrorMessage});
++			PKCEResponseDelegate.Unbind();
++			ResetStateFlags(IPS_PKCE | IPS_CONNECTING);
+ 		}
++#endif
+ 	}
+ 	else
+ 	{
+@@ -506,7 +531,7 @@ void UImmutablePassport::OnConnectResponse(FImtblJSResponse Response)
+ 		{
+ 			IMTBL_WARN("Connect PKCE attempt failed.");
+ 			ResetStateFlags(IPS_PKCE);
+-			Response.Error.IsSet() ? Msg = Response.Error->ToString() : Msg = Response.JsonObject->GetStringField(TEXT("error"));
++			Msg = GetResponseError(Response, TEXT("Passport connection failed."));
+ 		}
+ 		Analytics->Track(UImmutableAnalytics::EEventName::COMPLETE_LOGIN_PKCE, Response.success);
+ 		PKCEResponseDelegate.ExecuteIfBound(FImmutablePassportResult{Response.success, Msg, Response});
+@@ -536,15 +561,13 @@ void UImmutablePassport::OnBridgeCallbackResponse(FImtblJSResponse Response)
+ 		return;
+ 	}
+ 
++	const FString Error = GetResponseError(Response, TEXT(""));
+ 	if (!Response.success)
+ 	{
+-		IMTBL_LOG_FUNC("Response for %s is unsuccessfull", *Response.responseFor);
++		const FString ErrorMessage = Error.IsEmpty() ? TEXT("<none provided>") : Error;
++		IMTBL_ERR_FUNC("Bridge request failed; Action=%s, RequestId=%s, Error=%s", *Response.responseFor, *Response.requestId, *ErrorMessage);
+ 	}
+ 
+-	FString Error;
+-
+-	Response.JsonObject->TryGetStringField(TEXT("error"), Error);
+-
+ 	ResponseDelegate->ExecuteIfBound(FImmutablePassportResult{ Response.success, Error, Response });
+ }
+ 
+@@ -566,23 +589,62 @@ bool UImmutablePassport::IsStateFlagsSet(uint8 StateIn) const
+ void UImmutablePassport::SavePassportSettings()
+ {
+ 	UImmutableSaveGame* SaveGameInstance = Cast<UImmutableSaveGame>(UGameplayStatics::CreateSaveGameObject(UImmutableSaveGame::StaticClass()));
+-
++	if (!SaveGameInstance)
++	{
++		IMTBL_ERR("Failed to create Passport save game object")
++		return;
++	}
+ 	SaveGameInstance->bWasConnectedViaPKCEFlow = IsStateFlagsSet(IPS_PKCE | IPS_CONNECTED);
+ 
+-	UGameplayStatics::SaveGameToSlot(SaveGameInstance, PASSPORT_SAVE_GAME_SLOT_NAME, 0);
++	UGameplayStatics::SaveGameToSlot(SaveGameInstance, PASSPORT_SAVE_GAME_SLOT_NAME, GetWorldUserIndex());
+ }
+ 
+ void UImmutablePassport::LoadPassportSettings()
+ {
+-	if (UGameplayStatics::DoesSaveGameExist(PASSPORT_SAVE_GAME_SLOT_NAME, 0))
++	const int32 UserIndex = GetWorldUserIndex();
++	if (UGameplayStatics::DoesSaveGameExist(PASSPORT_SAVE_GAME_SLOT_NAME, UserIndex))
+ 	{
+-		if (const UImmutableSaveGame* SaveGameInstance = Cast<UImmutableSaveGame>(UGameplayStatics::LoadGameFromSlot(PASSPORT_SAVE_GAME_SLOT_NAME, 0)))
++		if (const UImmutableSaveGame* SaveGameInstance = Cast<UImmutableSaveGame>(
++			UGameplayStatics::LoadGameFromSlot(PASSPORT_SAVE_GAME_SLOT_NAME, UserIndex)))
+ 		{
+ 			SaveGameInstance->bWasConnectedViaPKCEFlow ? SetStateFlags(IPS_PKCE) : ResetStateFlags(IPS_PKCE);
+ 		}
+ 	}
+ }
+ 
++UGameInstance* UImmutablePassport::GetGameInstance() const
++{
++	if (const UGameInstanceSubsystem* Subsystem = Cast<UGameInstanceSubsystem>(GetOuter()))
++	{
++		return Subsystem->GetGameInstance();
++	}
++	return nullptr;
++}
++
++int32 UImmutablePassport::GetWorldUserIndex() const
++{
++#if WITH_EDITOR
++	if (const UGameInstance* GameInstance = GetGameInstance())
++	{
++		if (const FWorldContext* WorldContext = GameInstance->GetWorldContext())
++		{
++			return WorldContext->PIEInstance == INDEX_NONE ? 0 : WorldContext->PIEInstance;
++		}
++	}
++#endif
++	return 0;
++}
++
++void UImmutablePassport::LaunchURL(const FString& URL, const FString& Params, FString& OutError)
++{
++	if (CustomLaunchURLDelegate.IsBound())
++	{
++		CustomLaunchURLDelegate.Execute(URL, Params, OutError);
++		return;
++	}
++	FPlatformProcess::LaunchURL(*URL, Params.IsEmpty() ? nullptr : *Params, &OutError);
++}
++
+ void UImmutablePassport::OnDeepLinkActivated(const FString& DeepLink)
+ {
+ 	OnHandleDeepLink.Clear();
+@@ -747,4 +809,4 @@ void UImmutablePassport::LaunchAndroidUrl(FString Url)
+ 		CallJniStaticVoidMethod(Env, jimmutableAndroidClass, jlaunchUrl, FJavaWrapper::GameActivityThis, jurl);
+ 	}
+ }
+-#endif
+\ No newline at end of file
++#endif
+diff --git a/Source/Immutable/Private/Immutable/ImmutableSubsystem.cpp b/Source/Immutable/Private/Immutable/ImmutableSubsystem.cpp
+index 3628bb6e1d5ce3bc3e9580793028f3448fe839d7..7aea6a507215043a0235393fa08318f582a4d1f7 100644
+--- a/Source/Immutable/Private/Immutable/ImmutableSubsystem.cpp
++++ b/Source/Immutable/Private/Immutable/ImmutableSubsystem.cpp
+@@ -4,6 +4,7 @@
+ 
+ #include "Blueprint/UserWidget.h"
+ #include "Engine/GameViewportClient.h"
++#include "Engine/World.h"
+ 
+ #include "Immutable/ImmutablePassport.h"
+ #include "Immutable/ImtblJSConnector.h"
+@@ -88,6 +89,17 @@ void UImmutableSubsystem::SetupGameBridge()
+ 	{
+ 		return;
+ 	}
++
++#if !USING_BLUI_CEF
++	// The viewport-created delegate is global, so multiplayer PIE also invokes this for headless server game instances.
++	const UWorld* World = GetWorld();
++	if (!World || !World->GetGameViewport())
++	{
++		IMTBL_LOG("Skipping game bridge setup because this game instance has no game viewport")
++		return;
++	}
++#endif
++
+ 	bHasSetupGameBridge = true;
+ 
+ #if USING_BLUI_CEF
+@@ -169,4 +181,4 @@ void UImmutableSubsystem::OnViewportCreated()
+ void UImmutableSubsystem::WorldTickStart(UWorld* World, ELevelTick TickType, float DeltaSeconds)
+ {
+ 	ManageBridgeDelegateQueue();
+-}
+\ No newline at end of file
++}
+diff --git a/Source/Immutable/Private/Immutable/ImtblBrowserUserWidget.cpp b/Source/Immutable/Private/Immutable/ImtblBrowserUserWidget.cpp
+index bf8e3450a728b32a90c82480b9d9360c3d794037..7344eef6f78f437850696eb57c7e268c3097985e 100644
+--- a/Source/Immutable/Private/Immutable/ImtblBrowserUserWidget.cpp
++++ b/Source/Immutable/Private/Immutable/ImtblBrowserUserWidget.cpp
+@@ -10,7 +10,6 @@
+ 
+ #include "Immutable/Browser/ImmutableJSConnectorBrowserWidget.h"
+ #include "Immutable/ImtblJSConnector.h"
+-#include "Immutable/ImmutableUtilities.h"
+ #include "Immutable/Misc/ImtblLogging.h"
+ 
+ TSharedRef<SWidget> UImtblBrowserUserWidget::RebuildWidget()
+@@ -55,12 +54,7 @@ TSharedRef<SWidget> UImtblBrowserUserWidget::RebuildWidget()
+ 			});
+ 			W_Browser->MulticastDelegate_OnBrowserCreated()->AddWeakLambda(this, [this]()
+ 			{
+-				FString JavaScript;
+-				if (FImmutableUtilities::LoadGameBridge(JavaScript))
+-				{
+-					FString IndexHtml = FString("<!doctype html><html lang='en'><head><meta " "charset='utf-8'><title>GameSDK Bridge</title><script>") + JavaScript + FString("</script></head><body><h1>Bridge Running</h1></body></html>");
+-					W_Browser->LoadString(IndexHtml, TEXT("file:///immutable/index.html"));
+-				}
++				W_Browser->LoadGameBridge();
+ 			});
+ 			ScaleBox->AddChild(W_Browser);
+ 			if (UCanvasPanelSlot* RootWidgetSlot = Cast<UCanvasPanelSlot>(ScaleBox->Slot))
+@@ -125,4 +119,4 @@ TWeakObjectPtr<class UImtblJSConnector> UImtblBrowserUserWidget::GetJSConnector(
+ 	}
+ 
+ 	return W_Browser->GetJSConnector();
+-}
+\ No newline at end of file
++}
+diff --git a/Source/Immutable/Private/Immutable/ImtblJSConnector.cpp b/Source/Immutable/Private/Immutable/ImtblJSConnector.cpp
+index ecc74032c30f619ee76a9c6f35d7525775891c8c..a88b9810cff1957413457c3cea9c3d9f2a1e663a 100644
+--- a/Source/Immutable/Private/Immutable/ImtblJSConnector.cpp
++++ b/Source/Immutable/Private/Immutable/ImtblJSConnector.cpp
+@@ -97,7 +97,7 @@ void UImtblJSConnector::CallJS(const FImtblJSRequest& Request, FImtblJSResponseD
+ {
+ 	if (!IsBridgeReady())
+ 	{
+-		// IMTBL_WARN("Attempt to call Immutable JS bridge before bridge ready")
++		IMTBL_WARN("Attempt to call Immutable JS bridge before bridge ready")
+ 		AddCallbackWhenBridgeReady(FOnBridgeReadyDelegate::FDelegate::CreateLambda([Request, HandleResponse, ResponseTimeout, this]()
+ 		{
+ 			CallJS(Request, HandleResponse, ResponseTimeout);
+@@ -143,4 +143,4 @@ void UImtblJSConnector::SetMobileBridgeReady()
+ 	OnBridgeReady.Broadcast();
+ 	OnBridgeReady.Clear();
+ }
+-#endif
+\ No newline at end of file
++#endif
+diff --git a/Source/Immutable/Private/Immutable/Tests/ImtblMessagesTest.cpp b/Source/Immutable/Private/Immutable/Tests/ImtblMessagesTest.cpp
+index 3918188d6b1075bc2fb562eb59c3f85387c8c701..14090bbb80155613e367d79a53ef943ceba9cd39 100644
+--- a/Source/Immutable/Private/Immutable/Tests/ImtblMessagesTest.cpp
++++ b/Source/Immutable/Private/Immutable/Tests/ImtblMessagesTest.cpp
+@@ -74,4 +74,33 @@ bool FImtblMessagesTest::RunTest(const FString& Parameters)
+ 	return true;
+ }
+ 
++#if ((ENGINE_MAJOR_VERSION <= 4) || (ENGINE_MAJOR_VERSION == 5 && ENGINE_MINOR_VERSION <= 4))
++IMPLEMENT_SIMPLE_AUTOMATION_TEST(FImtblIlluviumResponseHandlingTest, "Immutable.Illuvium.ResponseHandling", EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::EngineFilter)
++#else
++IMPLEMENT_SIMPLE_AUTOMATION_TEST(FImtblIlluviumResponseHandlingTest, "Immutable.Illuvium.ResponseHandling", EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::EngineFilter)
++#endif
++
++bool FImtblIlluviumResponseHandlingTest::RunTest(const FString& Parameters)
++{
++	const TOptional<FImtblJSResponse> Response = FImtblJSResponse::FromJsonString(
++		TEXT("{\"responseFor\":\"getToken\",\"requestId\":\"42\",\"success\":false,\"errorType\":0,\"error\":\"Denied\"}"));
++
++	TestTrue(TEXT("A response with optional result data parses"), Response.IsSet());
++	if (!Response.IsSet())
++	{
++		return false;
++	}
++
++	TestTrue(TEXT("Structured response errors are retained"), Response->Error.IsSet());
++	if (Response->Error.IsSet())
++	{
++		TestEqual(TEXT("Structured response errors include their type"), Response->Error->ToString(), FString(TEXT("AuthenticationError: Denied")));
++	}
++	TestEqual(TEXT("A missing string result is tolerated"), UImmutablePassport::GetResponseResultAsString(*Response), FString());
++	TestFalse(TEXT("A missing bool result is tolerated"), UImmutablePassport::GetResponseResultAsBool(*Response));
++	TestTrue(TEXT("A missing array result is tolerated"), UImmutablePassport::GetResponseResultAsStringArray(*Response).IsEmpty());
++
++	return true;
++}
++
+ #endif // WITH_DEV_AUTOMATION_TESTS
+diff --git a/Source/Immutable/Public/Immutable/Actions/ImtblBlueprintAsyncAction.h b/Source/Immutable/Public/Immutable/Actions/ImtblBlueprintAsyncAction.h
+index 7f8d91901eecb954b9c541e2f0e55a20eed82dd1..2d6b7f43ff487af8a3318193ea38bfdc0f980d0a 100644
+--- a/Source/Immutable/Public/Immutable/Actions/ImtblBlueprintAsyncAction.h
++++ b/Source/Immutable/Public/Immutable/Actions/ImtblBlueprintAsyncAction.h
+@@ -2,11 +2,12 @@
+ 
+ #pragma once
+ 
+-#include "Immutable/ImmutableSubsystem.h"
+ #include "Kismet/BlueprintAsyncActionBase.h"
+ 
+ #include "ImtblBlueprintAsyncAction.generated.h"
+ 
++class UImmutableSubsystem;
++
+ /**
+  
+  * base class for asynchronous actions
+@@ -17,7 +18,8 @@ class IMMUTABLE_API UImtblBlueprintAsyncAction : public UBlueprintAsyncActionBas
+ 	GENERATED_BODY()
+ 
+ protected:
+-	UObject* WorldContextObject;
++	UPROPERTY(Transient)
++	TObjectPtr<UObject> RetainedWorldContextObject = nullptr;
+ 
+ 	// Get subsystem
+ 	UImmutableSubsystem* GetSubsystem() const;
+diff --git a/Source/Immutable/Public/Immutable/Browser/ImmutableBaseBrowserWidget.h b/Source/Immutable/Public/Immutable/Browser/ImmutableBaseBrowserWidget.h
+index cabde28b4b06f0462cb9dca61aa4c518fe205c15..da6891b454e426621726083793fb19802518880f 100644
+--- a/Source/Immutable/Public/Immutable/Browser/ImmutableBaseBrowserWidget.h
++++ b/Source/Immutable/Public/Immutable/Browser/ImmutableBaseBrowserWidget.h
+@@ -8,6 +8,9 @@
+ 
+ #include "ImmutableBaseBrowserWidget.generated.h"
+ 
++class SWebBrowser;
++class SWebBrowserView;
++
+ DECLARE_DYNAMIC_MULTICAST_DELEGATE_FourParams(FImmutableBrowserConsoleMessageDynamicMulticastDelegate, const FString&, Message, const FString&, Source, int32, Line, int32, Severity);
+ 
+ /**
+@@ -67,6 +70,7 @@ protected:
+ 	virtual void HandleConsoleMessage(const FString& Message, const FString& Source, int32 Line, int32 Severity);
+ 
+ 	virtual void OnBrowserCreated();
++	int32 GetWorldUserIndex() const;
+ 
+ protected:
+ 	/** Called when console messages are logged */
+@@ -78,7 +82,11 @@ protected:
+ 
+ #if USING_BUNDLED_CEF
+ 	/** The underlying Slate web browser widget */
++#if WITH_EDITOR
++	TSharedPtr<SWebBrowserView> WebBrowserWidget;
++#else
+ 	TSharedPtr<SWebBrowser> WebBrowserWidget;
++#endif
+ #endif
+ 
+ 	/** URL that the browser will initially navigate to */
+@@ -89,4 +97,4 @@ protected:
+ 
+ 	/** Whether to show initial loading throbber */
+ 	bool bShowInitialThrobber = false;
+-};
+\ No newline at end of file
++};
+diff --git a/Source/Immutable/Public/Immutable/Browser/ImmutableJSConnectorBrowserWidget.h b/Source/Immutable/Public/Immutable/Browser/ImmutableJSConnectorBrowserWidget.h
+index 68003e6b4d73952dc684bc906911ae1a8bdd86bd..61648646f2c52b8fd08e6371de8deb2118cf98bb 100644
+--- a/Source/Immutable/Public/Immutable/Browser/ImmutableJSConnectorBrowserWidget.h
++++ b/Source/Immutable/Public/Immutable/Browser/ImmutableJSConnectorBrowserWidget.h
+@@ -16,6 +16,7 @@ public:
+ 
+ 	UFUNCTION(BlueprintPure)
+ 	UImtblJSConnector* GetJSConnector() const;
++	void LoadGameBridge();
+ 
+ 	/**
+ 	 * Execute JavaScript in the browser context
+@@ -47,4 +48,4 @@ protected:
+ protected:
+ 	UPROPERTY(Transient)
+ 	TObjectPtr<UImtblJSConnector> JSConnector;
+-};
+\ No newline at end of file
++};
+diff --git a/Source/Immutable/Public/Immutable/ImmutablePassport.h b/Source/Immutable/Public/Immutable/ImmutablePassport.h
+index 8316c575f1d07c7cc765093a3053ca0f4bf07eb6..3501970aa15980c119d69a138444457de659e246 100644
+--- a/Source/Immutable/Public/Immutable/ImmutablePassport.h
++++ b/Source/Immutable/Public/Immutable/ImmutablePassport.h
+@@ -12,6 +12,9 @@
+ 
+ #include "ImmutablePassport.generated.h"
+ 
++class UGameInstance;
++class UImmutableAnalytics;
++
+ /**
+  * Converts a UStruct instance to a JSON string representation.
+  *
+@@ -71,6 +74,7 @@ public:
+ 	 * Delegate used for JavaScript callbacks.
+ 	 */
+ 	DECLARE_DELEGATE_OneParam(FImtblPassportResponseDelegate, FImmutablePassportResult);
++	DECLARE_DELEGATE_ThreeParams(FImtblPassportLaunchURLDelegate, const FString& /* URL */, const FString& /* Params */, FString& /* OutError */);
+ 
+ #if PLATFORM_ANDROID
+ 	/**
+@@ -214,6 +218,11 @@ public:
+ 	 */
+ 	void HasStoredCredentials(const FImtblPassportResponseDelegate& ResponseDelegate);
+ 
++	void SetCustomLaunchURLDelegate(const FImtblPassportLaunchURLDelegate& NewDelegate)
++	{
++		CustomLaunchURLDelegate = NewDelegate;
++	}
++
+ 	/**
+ 	 * Retrieves the "result" as string field from Response.JsonObject.
+ 	 *
+@@ -444,6 +453,9 @@ private:
+ 	 * Loads the passport settings from save game object.
+ 	 */
+ 	void LoadPassportSettings();
++	UGameInstance* GetGameInstance() const;
++	int32 GetWorldUserIndex() const;
++	void LaunchURL(const FString& URL, const FString& Params, FString& OutError);
+ 
+ private:
+ 	/**
+@@ -462,10 +474,11 @@ private:
+ 
+ 	/** Passport state flags. */
+ 	uint8 StateFlags = IPS_NONE;
++	FImtblPassportLaunchURLDelegate CustomLaunchURLDelegate;
+ 
+ 	/** Pointer to the analytics manager instance for tracking events and metrics. */
+ 	UPROPERTY()
+-	class UImmutableAnalytics* Analytics = nullptr;
++	UImmutableAnalytics* Analytics = nullptr;
+ 
+ 	/**
+ 	 * PKCE data used for PKCE operations e.g. login and logout flows.
+@@ -474,4 +487,4 @@ private:
+ 	 */
+ 	UPROPERTY(Transient)
+ 	TObjectPtr<UImmutablePKCEData> PKCEData;
+-};
+\ No newline at end of file
++};
+diff --git a/Source/Immutable/Public/Immutable/ImtblJSMessages.h b/Source/Immutable/Public/Immutable/ImtblJSMessages.h
+index f280a64b9c7c8f458b8db33f020d21c245a1d3c3..3f93c99e26e2ec7e42ad0bd0d4906d733ef67c86 100644
+--- a/Source/Immutable/Public/Immutable/ImtblJSMessages.h
++++ b/Source/Immutable/Public/Immutable/ImtblJSMessages.h
+@@ -86,7 +86,6 @@ struct IMMUTABLE_API FImtblJSResponse
+ 
+ 	static TOptional<FImtblJSResponse> FromJsonString(const FString& JsonString)
+ 	{
+-		TOptional<FImtblJSResponse> Response;
+ 		FImtblJSResponse JSResponse;
+ 
+ 		// Parse the JSON
+@@ -94,14 +93,12 @@ struct IMMUTABLE_API FImtblJSResponse
+ 		if (!FJsonSerializer::Deserialize(JsonReader, JSResponse.JsonObject) || !JSResponse.JsonObject.IsValid())
+ 		{
+ 			IMTBL_ERR("Could not parse response from JavaScript -- invalid JSON: %s", *JsonString)
++			return {};
+ 		}
+-		else if (!FJsonObjectConverter::JsonObjectToUStruct(JSResponse.JsonObject.ToSharedRef(), &JSResponse, 0, 0))
++		if (!FJsonObjectConverter::JsonObjectToUStruct(JSResponse.JsonObject.ToSharedRef(), &JSResponse, 0, 0))
+ 		{
+ 			IMTBL_ERR("Could not parse response from JavaScript into the expected " "response object format: %s", *JsonString)
+-		}
+-		else
+-		{
+-			Response = JSResponse;
++			return {};
+ 		}
+ 
+ 		if (!JSResponse.success)
+@@ -113,9 +110,12 @@ struct IMMUTABLE_API FImtblJSResponse
+ 				JSResponse.JsonObject->TryGetNumberField(TEXT("errorType"), ErrType);
+ 				JSResponse.JsonObject->TryGetStringField(TEXT("error"), Error);
+ 			}
+-			JSResponse.Error = FImtblResponseError{static_cast<EImtblPassportError>(ErrType), Error};
++			if (ErrType >= 0 || !Error.IsEmpty())
++			{
++				JSResponse.Error = FImtblResponseError{static_cast<EImtblPassportError>(ErrType), Error};
++			}
+ 		}
+ 
+-		return Response;
++		return JSResponse;
+ 	}
+ };
+diff --git a/Source/ImmutableEditor/ImmutableEditor.Build.cs b/Source/ImmutableEditor/ImmutableEditor.Build.cs
+index 24bb1bafe41fbfebb324a14ed8f53812e07d887f..ed09b123e8e4ceaef48b90663473355f360bdc4b 100644
+--- a/Source/ImmutableEditor/ImmutableEditor.Build.cs
++++ b/Source/ImmutableEditor/ImmutableEditor.Build.cs
+@@ -7,6 +7,8 @@ public class ImmutableEditor : ModuleRules
+     public ImmutableEditor(ReadOnlyTargetRules Target) : base(Target)
+     {
+         PCHUsage = ModuleRules.PCHUsageMode.UseExplicitOrSharedPCHs;
++		IWYUSupport = IWYUSupport.Full;
++		bUseUnity = true;
+ 
+ #if UE_5_1_OR_LATER
+ 			IncludeOrderVersion = EngineIncludeOrderVersion.Latest;
+@@ -69,4 +71,4 @@ public class ImmutableEditor : ModuleRules
+             // RuntimeDependencies.Add("$(PluginDir)/Content/index.html");
+         }
+     }
+-}
+\ No newline at end of file
++}
