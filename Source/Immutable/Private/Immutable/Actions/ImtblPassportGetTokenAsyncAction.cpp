@@ -10,7 +10,7 @@ UImtblPassportGetTokenAsyncAction* UImtblPassportGetTokenAsyncAction::GetAccessT
 {
 	UImtblPassportGetTokenAsyncAction* Node = NewObject<UImtblPassportGetTokenAsyncAction>();
 
-	Node->RetainedWorldContextObject = WorldContextObject;
+	Node->WorldContextObject = WorldContextObject;
 	Node->Type = ACCESS;
 	
 	return Node;
@@ -20,7 +20,7 @@ UImtblPassportGetTokenAsyncAction* UImtblPassportGetTokenAsyncAction::GetIdToken
 {
 	UImtblPassportGetTokenAsyncAction* Node = NewObject<UImtblPassportGetTokenAsyncAction>();
 
-	Node->RetainedWorldContextObject = WorldContextObject;
+	Node->WorldContextObject = WorldContextObject;
 	Node->Type = ID;
 
 	return Node;

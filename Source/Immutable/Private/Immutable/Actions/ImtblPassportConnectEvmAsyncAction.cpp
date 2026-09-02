@@ -9,7 +9,7 @@
 UImtblPassportConnectEvmAsyncAction* UImtblPassportConnectEvmAsyncAction::ConnectEvm(UObject* WorldContextObject)
 {
 	UImtblPassportConnectEvmAsyncAction* PassportInitBlueprintNode = NewObject<UImtblPassportConnectEvmAsyncAction>();
-	PassportInitBlueprintNode->RetainedWorldContextObject = WorldContextObject;
+	PassportInitBlueprintNode->WorldContextObject = WorldContextObject;
 	return PassportInitBlueprintNode;
 }
 

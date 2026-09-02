@@ -18,8 +18,7 @@ class IMMUTABLE_API UImtblBlueprintAsyncAction : public UBlueprintAsyncActionBas
 	GENERATED_BODY()
 
 protected:
-	UPROPERTY(Transient)
-	TObjectPtr<UObject> RetainedWorldContextObject = nullptr;
+	UObject* WorldContextObject;
 
 	// Get subsystem
 	UImmutableSubsystem* GetSubsystem() const;

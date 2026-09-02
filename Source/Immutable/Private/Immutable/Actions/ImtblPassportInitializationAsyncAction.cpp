@@ -14,7 +14,7 @@ UImtblPassportInitializationAsyncAction* UImtblPassportInitializationAsyncAction
 	PassportInitBlueprintNode->RedirectUri = RedirectUri;
 	PassportInitBlueprintNode->LogoutUri = LogoutUri;
 	PassportInitBlueprintNode->Environment = Environment;
-	PassportInitBlueprintNode->RetainedWorldContextObject = WorldContextObject;
+	PassportInitBlueprintNode->WorldContextObject = WorldContextObject;
 	PassportInitBlueprintNode->IsSilentLogout = IsSilentLogout;
 
 	return PassportInitBlueprintNode;

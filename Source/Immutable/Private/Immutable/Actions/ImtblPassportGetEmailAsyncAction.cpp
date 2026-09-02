@@ -9,7 +9,7 @@
 UImtblPassportGetEmailAsyncAction* UImtblPassportGetEmailAsyncAction::GetEmail(UObject* WorldContextObject)
 {
 	UImtblPassportGetEmailAsyncAction* PassportInitBlueprintNode = NewObject<UImtblPassportGetEmailAsyncAction>();
-	PassportInitBlueprintNode->RetainedWorldContextObject = WorldContextObject;
+	PassportInitBlueprintNode->WorldContextObject = WorldContextObject;
 	return PassportInitBlueprintNode;
 }
 

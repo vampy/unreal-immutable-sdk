@@ -10,7 +10,7 @@ UImtblPassportLogoutAsyncAction* UImtblPassportLogoutAsyncAction::Logout(UObject
 {
 	UImtblPassportLogoutAsyncAction* PassportInitBlueprintNode = NewObject<UImtblPassportLogoutAsyncAction>();
 
-	PassportInitBlueprintNode->RetainedWorldContextObject = WorldContextObject;
+	PassportInitBlueprintNode->WorldContextObject = WorldContextObject;
 	PassportInitBlueprintNode->bDoHardLogout = DoHardLogout;
 
 	return PassportInitBlueprintNode;

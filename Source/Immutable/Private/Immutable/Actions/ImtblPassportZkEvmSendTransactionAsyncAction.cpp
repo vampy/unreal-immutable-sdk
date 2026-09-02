@@ -9,7 +9,7 @@
 UImtblPassportZkEvmSendTransactionAsyncAction* UImtblPassportZkEvmSendTransactionAsyncAction::ZkEvmSendTransaction(UObject* WorldContextObject, const FImtblTransactionRequest& Request)
 {
 	UImtblPassportZkEvmSendTransactionAsyncAction* PassportZkEvmSendTransactionBlueprintNode = NewObject<UImtblPassportZkEvmSendTransactionAsyncAction>();
-	PassportZkEvmSendTransactionBlueprintNode->RetainedWorldContextObject = WorldContextObject;
+	PassportZkEvmSendTransactionBlueprintNode->WorldContextObject = WorldContextObject;
 	PassportZkEvmSendTransactionBlueprintNode->TransactionRequest = Request;
 	return PassportZkEvmSendTransactionBlueprintNode;
 }
@@ -57,7 +57,7 @@ UImtblPassportZkEvmSendTransactionWithConfirmationAA* UImtblPassportZkEvmSendTra
 {
 	UImtblPassportZkEvmSendTransactionWithConfirmationAA* ZkEvmSendTransactionWithConfirmationBPNode = NewObject<UImtblPassportZkEvmSendTransactionWithConfirmationAA>();
 	
-	ZkEvmSendTransactionWithConfirmationBPNode->RetainedWorldContextObject = WorldContextObject;
+	ZkEvmSendTransactionWithConfirmationBPNode->WorldContextObject = WorldContextObject;
 	ZkEvmSendTransactionWithConfirmationBPNode->TransactionRequest = Request;
 	
 	return ZkEvmSendTransactionWithConfirmationBPNode;

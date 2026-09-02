@@ -9,7 +9,7 @@
 UImtblPassportZkEvmRequestAccountsAsyncAction* UImtblPassportZkEvmRequestAccountsAsyncAction::RequestAccounts(UObject* WorldContextObject)
 {
 	UImtblPassportZkEvmRequestAccountsAsyncAction* PassportInitBlueprintNode = NewObject<UImtblPassportZkEvmRequestAccountsAsyncAction>();
-	PassportInitBlueprintNode->RetainedWorldContextObject = WorldContextObject;
+	PassportInitBlueprintNode->WorldContextObject = WorldContextObject;
 	return PassportInitBlueprintNode;
 }
 

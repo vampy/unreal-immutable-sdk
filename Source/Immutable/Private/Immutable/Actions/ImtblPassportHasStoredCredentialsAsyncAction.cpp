@@ -9,7 +9,7 @@ UImtblPassportHasStoredCredentialsAsyncAction* UImtblPassportHasStoredCredential
 {
 	UImtblPassportHasStoredCredentialsAsyncAction* PassportInitBlueprintNode = NewObject<UImtblPassportHasStoredCredentialsAsyncAction>();
 
-	PassportInitBlueprintNode->RetainedWorldContextObject = WorldContextObject;
+	PassportInitBlueprintNode->WorldContextObject = WorldContextObject;
 
 	return PassportInitBlueprintNode;
 }

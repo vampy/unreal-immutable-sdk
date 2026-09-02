@@ -5,7 +5,6 @@
 UImtblEmbeddedLoginAsyncAction* UImtblEmbeddedLoginAsyncAction::Login(UObject* WorldContextObject, UImmutableJSConnectorBrowserWidget* JSConnectorBrowserWidget)
 {
 	ThisClass* Action = NewObject<ThisClass>();
-	Action->RetainedWorldContextObject = WorldContextObject;
 
 	if (UWorld* World = GEngine->GetWorldFromContextObject(WorldContextObject, EGetWorldErrorMode::LogAndReturnNull))
 	{

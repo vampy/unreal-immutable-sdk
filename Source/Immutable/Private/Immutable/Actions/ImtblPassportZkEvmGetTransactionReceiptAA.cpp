@@ -10,7 +10,7 @@ UImtblPassportZkEvmGetTransactionReceiptAA* UImtblPassportZkEvmGetTransactionRec
 {
 	UImtblPassportZkEvmGetTransactionReceiptAA* PassportZkEvmSendTransactionBlueprintNode = NewObject<UImtblPassportZkEvmGetTransactionReceiptAA>();
 	
-	PassportZkEvmSendTransactionBlueprintNode->RetainedWorldContextObject = WorldContextObject;
+	PassportZkEvmSendTransactionBlueprintNode->WorldContextObject = WorldContextObject;
 	PassportZkEvmSendTransactionBlueprintNode->Hash = Hash;
 	
 	return PassportZkEvmSendTransactionBlueprintNode;

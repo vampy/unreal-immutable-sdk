@@ -9,7 +9,7 @@
 UImtblPassportZkEvmGetBalanceAsyncAction* UImtblPassportZkEvmGetBalanceAsyncAction::ZkEvmGetBalance(UObject* WorldContextObject, const FString& Address, const FString& BlockNumberOrTag)
 {
 	UImtblPassportZkEvmGetBalanceAsyncAction* PassportInitBlueprintNode = NewObject<UImtblPassportZkEvmGetBalanceAsyncAction>();
-	PassportInitBlueprintNode->RetainedWorldContextObject = WorldContextObject;
+	PassportInitBlueprintNode->WorldContextObject = WorldContextObject;
 	PassportInitBlueprintNode->Address = Address;
 	PassportInitBlueprintNode->BlockNumberOrTag = BlockNumberOrTag;
 	return PassportInitBlueprintNode;

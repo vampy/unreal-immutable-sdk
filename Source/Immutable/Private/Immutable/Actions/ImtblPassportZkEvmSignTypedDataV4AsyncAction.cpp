@@ -9,7 +9,7 @@ UImtblPassportZkEvmSignTypedDataV4AsyncAction* UImtblPassportZkEvmSignTypedDataV
 {
 	UImtblPassportZkEvmSignTypedDataV4AsyncAction* PassportZkEvmSignTypedDataV4BlueprintNode = NewObject<UImtblPassportZkEvmSignTypedDataV4AsyncAction>();
 	
-	PassportZkEvmSignTypedDataV4BlueprintNode->RetainedWorldContextObject = WorldContextObject;
+	PassportZkEvmSignTypedDataV4BlueprintNode->WorldContextObject = WorldContextObject;
 	PassportZkEvmSignTypedDataV4BlueprintNode->JsonStringSignRequest = JsonStringRequest;
 
 	return PassportZkEvmSignTypedDataV4BlueprintNode;

@@ -9,12 +9,12 @@
 
 UImmutableSubsystem* UImtblBlueprintAsyncAction::GetSubsystem() const
 {
-	if (!IsValid(RetainedWorldContextObject))
+	if (!IsValid(WorldContextObject))
 	{
 		return nullptr;
 	}
 
-	UWorld* World = RetainedWorldContextObject->GetWorld();
+	UWorld* World = WorldContextObject->GetWorld();
 	UGameInstance* GameInstance = World ? World->GetGameInstance() : nullptr;
 	return GameInstance ? GameInstance->GetSubsystem<UImmutableSubsystem>() : nullptr;
 }

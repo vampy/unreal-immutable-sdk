@@ -10,7 +10,7 @@ UImtblPassportGetLinkedAddressesAsyncAction* UImtblPassportGetLinkedAddressesAsy
 {
 	UImtblPassportGetLinkedAddressesAsyncAction* Node = NewObject<UImtblPassportGetLinkedAddressesAsyncAction>();
 	
-	Node->RetainedWorldContextObject = WorldContextObject;
+	Node->WorldContextObject = WorldContextObject;
 	
 	return Node;
 }

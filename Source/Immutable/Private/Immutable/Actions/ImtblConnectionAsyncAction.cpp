@@ -8,7 +8,7 @@ UImtblConnectionAsyncActions* UImtblConnectionAsyncActions::Login(UObject* World
 {
 	UImtblConnectionAsyncActions* Node = NewObject<UImtblConnectionAsyncActions>();
 
-	Node->RetainedWorldContextObject = WorldContextObject;
+	Node->WorldContextObject = WorldContextObject;
 	Node->DirectLoginOptions = DirectLoginOptions;
 
 	return Node;
