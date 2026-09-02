@@ -3,10 +3,11 @@
 #include "Immutable/ImmutableSubsystem.h"
 
 #include "Blueprint/UserWidget.h"
+#include "Engine/World.h"
 #include "Immutable/ImmutablePassport.h"
+#include "Immutable/ImtblJSConnector.h"
 #include "Immutable/Misc/ImtblLogging.h"
 #include "ImtblBrowserUserWidget.h"
-#include "Immutable/ImtblJSConnector.h"
 
 
 void UImmutableSubsystem::Initialize(FSubsystemCollectionBase& Collection)
@@ -82,6 +83,17 @@ void UImmutableSubsystem::SetupGameBridge()
 	{
 		return;
 	}
+
+#if !USING_BLUI_CEF
+	// The viewport-created delegate is global, so multiplayer PIE also invokes this for headless server game instances.
+	const UWorld* World = GetWorld();
+	if (!World || !World->GetGameViewport())
+	{
+		IMTBL_LOG("Skipping game bridge setup because this game instance has no game viewport")
+		return;
+	}
+#endif
+
 	bHasSetupGameBridge = true;
 
 #if USING_BLUI_CEF

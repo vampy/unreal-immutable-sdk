@@ -125,7 +125,7 @@ index 5e5027b77b7bf1e578b2194c97608c50210aa151..c6bd39f431b946e26ec972d4deb53891
 +	]
 +}
 diff --git a/Source/Immutable/Immutable.Build.cs b/Source/Immutable/Immutable.Build.cs
-index 2129f99ab1a7c33e33e47252b6bfce25bceb7d5c..6e5a474fce24b313906bb01bfde07efa981d0d89 100644
+index 2129f99ab1a7c33e33e47252b6bfce25bceb7d5c..916da83410e84df3a14b436a7a53673886b389db 100644
 --- a/Source/Immutable/Immutable.Build.cs
 +++ b/Source/Immutable/Immutable.Build.cs
 @@ -9,6 +9,8 @@ public class Immutable : ModuleRules
@@ -137,7 +137,20 @@ index 2129f99ab1a7c33e33e47252b6bfce25bceb7d5c..6e5a474fce24b313906bb01bfde07efa
  
  #if UE_5_1_OR_LATER
  			IncludeOrderVersion = EngineIncludeOrderVersion.Latest;
-@@ -120,4 +122,4 @@ public class Immutable : ModuleRules
+@@ -57,6 +59,12 @@ public class Immutable : ModuleRules
+ 
+ #if UE_5_1_OR_LATER
+ 			PrivateDependencyModuleNames.Add("WebBrowser");
++			if (Target.Platform == UnrealTargetPlatform.Win64
++				|| Target.Platform == UnrealTargetPlatform.Mac
++				|| Target.Platform == UnrealTargetPlatform.Linux)
++			{
++				AddEngineThirdPartyPrivateStaticDependencies(Target, "CEF3");
++			}
+ 			PublicDefinitions.Add("USING_BUNDLED_CEF=1");
+ 			PublicDefinitions.Add("USING_BLUI_CEF=0");
+ #else
+@@ -120,4 +128,4 @@ public class Immutable : ModuleRules
  			);
  		}
  	}
@@ -723,7 +736,7 @@ index a51a8032d6a9eca47c8c461ae4f3e2b5b2fe27d4..814a1e307037e3b56c18920cf9aa6f92
  }
  
 diff --git a/Source/Immutable/Private/Immutable/ImmutablePassport.cpp b/Source/Immutable/Private/Immutable/ImmutablePassport.cpp
-index f9048c9e10e40277ca31437fef1f14927fcd2110..eaceec45d833410baa39db96ca8e632514f6da7f 100644
+index f9048c9e10e40277ca31437fef1f14927fcd2110..79c2d8bd14aeaac770eaf2b7a59818161724598b 100644
 --- a/Source/Immutable/Private/Immutable/ImmutablePassport.cpp
 +++ b/Source/Immutable/Private/Immutable/ImmutablePassport.cpp
 @@ -29,7 +29,7 @@
@@ -748,7 +761,7 @@ index f9048c9e10e40277ca31437fef1f14927fcd2110..eaceec45d833410baa39db96ca8e6325
  	UApplicationConfig* ApplicationConfig = Settings->DefaultApplicationConfig.GetDefaultObject();
  
  	if (!ApplicationConfig)
-@@ -266,8 +266,8 @@ FString UImmutablePassport::GetResponseResultAsString(const FImtblJSResponse& Re
+@@ -266,11 +266,13 @@ FString UImmutablePassport::GetResponseResultAsString(const FImtblJSResponse& Re
  	if (!Response.JsonObject.IsValid())
  	{
  		IMTBL_ERR("Response JSON data for %s is not valid", *Response.responseFor)
@@ -758,8 +771,14 @@ index f9048c9e10e40277ca31437fef1f14927fcd2110..eaceec45d833410baa39db96ca8e6325
 +		return "";
  	}
  
- 	return Response.JsonObject->GetStringField(TEXT("result"));
-@@ -278,8 +278,8 @@ bool UImmutablePassport::GetResponseResultAsBool(const FImtblJSResponse& Respons
+-	return Response.JsonObject->GetStringField(TEXT("result"));
++	FString Result;
++	Response.JsonObject->TryGetStringField(TEXT("result"), Result);
++	return Result;
+ }
+ 
+ bool UImmutablePassport::GetResponseResultAsBool(const FImtblJSResponse& Response)
+@@ -278,8 +280,8 @@ bool UImmutablePassport::GetResponseResultAsBool(const FImtblJSResponse& Respons
  	if (!Response.JsonObject.IsValid())
  	{
  		IMTBL_ERR("Response JSON data for %s is not valid", *Response.responseFor)
@@ -770,7 +789,7 @@ index f9048c9e10e40277ca31437fef1f14927fcd2110..eaceec45d833410baa39db96ca8e6325
  	}
  
  	return Response.JsonObject->GetBoolField(TEXT("result"));
-@@ -290,12 +290,12 @@ TArray<FString> UImmutablePassport::GetResponseResultAsStringArray(const FImtblJ
+@@ -290,12 +292,12 @@ TArray<FString> UImmutablePassport::GetResponseResultAsStringArray(const FImtblJ
  	if (!Response.JsonObject.IsValid())
  	{
  		IMTBL_ERR("Response JSON data for %s is not valid", *Response.responseFor)
@@ -787,7 +806,7 @@ index f9048c9e10e40277ca31437fef1f14927fcd2110..eaceec45d833410baa39db96ca8e6325
  	for (const TSharedPtr<FJsonValue>& Value : Response.JsonObject->GetArrayField(TEXT("result")))
  	{
  		StringArray.Add(Value->AsString());
-@@ -357,6 +357,18 @@ void UImmutablePassport::ReinstateConnection(FImtblJSResponse Response)
+@@ -357,6 +359,18 @@ void UImmutablePassport::ReinstateConnection(FImtblJSResponse Response)
  	}
  }
  
@@ -806,7 +825,7 @@ index f9048c9e10e40277ca31437fef1f14927fcd2110..eaceec45d833410baa39db96ca8e6325
  bool UImmutablePassport::CheckIsInitialized(const FString& Action, const FImtblPassportResponseDelegate& ResponseDelegate) const
  {
  	const bool IsInitialized = IsStateFlagsSet(IPS_INITIALIZED);
-@@ -395,7 +407,7 @@ void UImmutablePassport::OnInitializeResponse(FImtblJSResponse Response)
+@@ -395,7 +409,7 @@ void UImmutablePassport::OnInitializeResponse(FImtblJSResponse Response)
  	if (auto ResponseDelegate = GetResponseDelegate(Response))
  	{
  		FString Error;
@@ -815,7 +834,7 @@ index f9048c9e10e40277ca31437fef1f14927fcd2110..eaceec45d833410baa39db96ca8e6325
  		if (Response.success)
  		{
  			SetStateFlags(IPS_INITIALIZED);
-@@ -429,7 +441,7 @@ void UImmutablePassport::OnInitDeviceFlowResponse(FImtblJSResponse Response)
+@@ -429,7 +443,7 @@ void UImmutablePassport::OnInitDeviceFlowResponse(FImtblJSResponse Response)
  		}
  		FString Err;
  
@@ -824,7 +843,7 @@ index f9048c9e10e40277ca31437fef1f14927fcd2110..eaceec45d833410baa39db96ca8e6325
  		if (Err.Len())
  		{
  			FString Msg = "Failed to connect to Browser: " + Err;
-@@ -445,7 +457,7 @@ void UImmutablePassport::OnInitDeviceFlowResponse(FImtblJSResponse Response)
+@@ -445,7 +459,7 @@ void UImmutablePassport::OnInitDeviceFlowResponse(FImtblJSResponse Response)
  void UImmutablePassport::OnLogoutResponse(FImtblJSResponse Response)
  {
  	auto ResponseDelegate = GetResponseDelegate(Response);
@@ -833,7 +852,7 @@ index f9048c9e10e40277ca31437fef1f14927fcd2110..eaceec45d833410baa39db96ca8e6325
  	if (!ResponseDelegate)
  	{
  		return;
-@@ -467,10 +479,9 @@ void UImmutablePassport::OnLogoutResponse(FImtblJSResponse Response)
+@@ -467,10 +481,9 @@ void UImmutablePassport::OnLogoutResponse(FImtblJSResponse Response)
  	{
  		IMTBL_LOG("Logged out without clearing browser session")
  		ResponseDelegate->ExecuteIfBound(FImmutablePassportResult{ true });
@@ -845,7 +864,7 @@ index f9048c9e10e40277ca31437fef1f14927fcd2110..eaceec45d833410baa39db96ca8e6325
  	FString Url;
  	FString ErrorMessage;
  
-@@ -493,11 +504,11 @@ void UImmutablePassport::OnLogoutResponse(FImtblJSResponse Response)
+@@ -493,11 +506,11 @@ void UImmutablePassport::OnLogoutResponse(FImtblJSResponse Response)
  		else
  		{
  #endif
@@ -859,7 +878,34 @@ index f9048c9e10e40277ca31437fef1f14927fcd2110..eaceec45d833410baa39db96ca8e6325
  				IMTBL_ERR("%s", *Message);
  				ResponseDelegate->ExecuteIfBound(FImmutablePassportResult{ false, Message, Response });
  
-@@ -648,24 +659,45 @@ bool UImmutablePassport::IsStateFlagsSet(uint8 StateIn) const
+@@ -619,14 +632,21 @@ void UImmutablePassport::OnBridgeCallbackResponse(FImtblJSResponse Response)
+ 		return;
+ 	}
+ 
+-	if (!Response.success)
++	FString Error;
++	if (Response.Error.IsSet())
+ 	{
+-		IMTBL_LOG_FUNC("Response for %s is unsuccessfull", *Response.responseFor);
++		Error = Response.Error->ToString();
++	}
++	else if (Response.JsonObject.IsValid())
++	{
++		Response.JsonObject->TryGetStringField(TEXT("error"), Error);
+ 	}
+ 
+-	FString Error;
+-
+-	Response.JsonObject->TryGetStringField(TEXT("error"), Error);
++	if (!Response.success)
++	{
++		const FString ErrorMessage = Error.IsEmpty() ? TEXT("<none provided>") : Error;
++		IMTBL_ERR_FUNC("Bridge request failed; Action=%s, RequestId=%s, Error=%s", *Response.responseFor, *Response.requestId, *ErrorMessage);
++	}
+ 
+ 	ResponseDelegate->ExecuteIfBound(FImmutablePassportResult{ Response.success, Error, Response });
+ }
+@@ -648,24 +668,45 @@ bool UImmutablePassport::IsStateFlagsSet(uint8 StateIn) const
  
  void UImmutablePassport::SavePassportSettings()
  {
@@ -909,7 +955,7 @@ index f9048c9e10e40277ca31437fef1f14927fcd2110..eaceec45d833410baa39db96ca8e6325
  #if PLATFORM_ANDROID | PLATFORM_IOS | PLATFORM_MAC
  void UImmutablePassport::OnDeepLinkActivated(FString DeepLink)
  {
-@@ -824,7 +856,7 @@ void UImmutablePassport::LaunchAndroidUrl(FString Url)
+@@ -824,7 +865,7 @@ void UImmutablePassport::LaunchAndroidUrl(FString Url)
  		jstring jurl = Env->NewStringUTF(TCHAR_TO_UTF8(*Url));
  		jclass jimmutableAndroidClass = FAndroidApplication::FindJavaClass("com/immutable/unreal/ImmutableActivity");
  		static jmethodID jlaunchUrl = FJavaWrapper::FindStaticMethod(Env, jimmutableAndroidClass, "startActivity", "(Landroid/app/Activity;Ljava/lang/String;)V", false);
@@ -931,23 +977,27 @@ index 903bae306544203270e05aaacdd512259bb96b5f..1fc5a7df1a6bd015571e6ed060ace1e8
  	return OutString;
  }
 diff --git a/Source/Immutable/Private/Immutable/ImmutableSubsystem.cpp b/Source/Immutable/Private/Immutable/ImmutableSubsystem.cpp
-index afba4c26f154d27321c2fdbcee614c17c9f4d9c7..329217765da544ea3d10ba88058b5425476104f3 100644
+index afba4c26f154d27321c2fdbcee614c17c9f4d9c7..63c5f121c8f210de97caab2fd26472e9003942b2 100644
 --- a/Source/Immutable/Private/Immutable/ImmutableSubsystem.cpp
 +++ b/Source/Immutable/Private/Immutable/ImmutableSubsystem.cpp
-@@ -1,11 +1,10 @@
+@@ -1,13 +1,13 @@
 -﻿// Fill out your copyright notice in the Description page of Project Settings.
 +// Fill out your copyright notice in the Description page of Project Settings.
  
  #include "Immutable/ImmutableSubsystem.h"
  
  #include "Blueprint/UserWidget.h"
++#include "Engine/World.h"
  #include "Immutable/ImmutablePassport.h"
++#include "Immutable/ImtblJSConnector.h"
  #include "Immutable/Misc/ImtblLogging.h"
 -#include "ImtblBlui.h"
  #include "ImtblBrowserUserWidget.h"
- #include "Immutable/ImtblJSConnector.h"
+-#include "Immutable/ImtblJSConnector.h"
  
-@@ -35,16 +34,16 @@ void UImmutableSubsystem::Initialize(FSubsystemCollectionBase& Collection)
+ 
+ void UImmutableSubsystem::Initialize(FSubsystemCollectionBase& Collection)
+@@ -35,16 +35,16 @@ void UImmutableSubsystem::Initialize(FSubsystemCollectionBase& Collection)
  void UImmutableSubsystem::Deinitialize()
  {
  	IMTBL_LOG_FUNCSIG
@@ -968,6 +1018,24 @@ index afba4c26f154d27321c2fdbcee614c17c9f4d9c7..329217765da544ea3d10ba88058b5425
  #if PLATFORM_ANDROID | PLATFORM_IOS
    UGameViewportClient::OnViewportCreated().Remove(EngineInitCompleteHandle);
  #else
+@@ -83,6 +83,17 @@ void UImmutableSubsystem::SetupGameBridge()
+ 	{
+ 		return;
+ 	}
++
++#if !USING_BLUI_CEF
++	// The viewport-created delegate is global, so multiplayer PIE also invokes this for headless server game instances.
++	const UWorld* World = GetWorld();
++	if (!World || !World->GetGameViewport())
++	{
++		IMTBL_LOG("Skipping game bridge setup because this game instance has no game viewport")
++		return;
++	}
++#endif
++
+ 	bHasSetupGameBridge = true;
+ 
+ #if USING_BLUI_CEF
 diff --git a/Source/Immutable/Private/Immutable/ImtblBlui.cpp b/Source/Immutable/Private/Immutable/ImtblBlui.cpp
 index c991b819bbfe901d7f7dabebe82a08c21522eda1..0f3c80496e8171cde55b085a45854b7af63d611d 100644
 --- a/Source/Immutable/Private/Immutable/ImtblBlui.cpp
@@ -989,18 +1057,252 @@ index c991b819bbfe901d7f7dabebe82a08c21522eda1..0f3c80496e8171cde55b085a45854b7a
  {
  #if USING_BLUI_CEF
 diff --git a/Source/Immutable/Private/Immutable/ImtblBrowserWidget.cpp b/Source/Immutable/Private/Immutable/ImtblBrowserWidget.cpp
-index 43f3d98c556264d0d30ec45c8aa8f2ac4f69590d..b47baf268f3f1baeaf8639d2f83298879d21fc15 100644
+index 43f3d98c556264d0d30ec45c8aa8f2ac4f69590d..5da7346f4ffedb9768f3b2e810cb4b97edf013fa 100644
 --- a/Source/Immutable/Private/Immutable/ImtblBrowserWidget.cpp
 +++ b/Source/Immutable/Private/Immutable/ImtblBrowserWidget.cpp
-@@ -8,6 +8,7 @@
+@@ -2,13 +2,212 @@
+ 
+ #include "ImtblBrowserWidget.h"
+ 
+-#include "Immutable/Misc/ImtblLogging.h"
+-#include "Immutable/ImtblJSConnector.h"
+ #include "Immutable/ImmutableUtilities.h"
++#include "Immutable/ImtblJSConnector.h"
++#include "Immutable/Misc/ImtblLogging.h"
++#include "Misc/ConfigCacheIni.h"
  #include "Misc/FileHelper.h"
  #if USING_BUNDLED_CEF
  #include "SWebBrowser.h"
 +#include "WebBrowserModule.h"
++#if WITH_CEF3
++// CEF headers include Windows types and define macros which conflict with Unreal's sanitized platform headers, so use the same include
++// boundary as the engine WebBrowser module. Omitting these guards causes errors such as CEF's TRUE constant being undefined.
++#if PLATFORM_WINDOWS
++#include "Windows/AllowWindowsPlatformTypes.h"
++#endif
++#pragma push_macro("OVERRIDE")
++#undef OVERRIDE
++THIRD_PARTY_INCLUDES_START
++#include "include/cef_request_context.h"
++#include "include/cef_version.h"
++THIRD_PARTY_INCLUDES_END
++#pragma pop_macro("OVERRIDE")
++#if PLATFORM_WINDOWS
++#include "Windows/HideWindowsPlatformTypes.h"
++#endif
++#endif
++#endif
++
++namespace
++{
++const TCHAR* ImmutableBridgeUrl = TEXT("file:///immutable/index.html");
++
++const TCHAR* ImmutableCefBindingShim = TEXT(R"JS(
++(function() {
++	if (window.__immutableUeConnectorShimInstalled) {
++		return;
++	}
++
++	window.__immutableUeConnectorShimInstalled = true;
++	window.ue = window.ue || {};
++
++	var queuedMessages = [];
++	var proxyConnector = {
++		sendtogame: function(message) {
++			queuedMessages.push(message);
++			console.log("[ImmutableBridgeDebug] Unreal JSConnector pending; queuedCallbacks=" + queuedMessages.length);
++		}
++	};
++
++	if (!window.ue.jsconnector) {
++		window.ue.jsconnector = proxyConnector;
++	}
++
++	function getRealConnector() {
++		if (!window.ue || !window.ue.jsconnector || window.ue.jsconnector === proxyConnector) {
++			return null;
++		}
++
++		return window.ue.jsconnector;
++	}
++
++	function flushQueuedMessages() {
++		var connector = getRealConnector();
++		if (!connector || typeof connector.sendtogame !== "function") {
++			return false;
++		}
++
++		if (queuedMessages.length > 0) {
++			console.log("[ImmutableBridgeDebug] Unreal JSConnector ready; flushingCallbacks=" + queuedMessages.length);
++		}
++
++		while (queuedMessages.length > 0) {
++			connector.sendtogame(queuedMessages.shift());
++		}
++
++		return true;
++	}
++
++	var attempts = 0;
++	var pollHandle = setInterval(function() {
++		attempts++;
++		if (flushQueuedMessages() || attempts >= 200) {
++			clearInterval(pollHandle);
++			if (queuedMessages.length > 0) {
++				console.error("[ImmutableBridgeDebug] Unreal JSConnector not defined after wait; queuedCallbacks=" + queuedMessages.length);
++			}
++		}
++	}, 25);
++})();
++)JS");
++
++#if USING_BUNDLED_CEF
++// Illuvium custom engine integration: this helper checks a WebBrowser setting added by our engine patch; stock Unreal Engine lacks it.
++// Keep this check aligned with the custom engine's [Browser] bUseExplicitCEFRootCachePath option.
++// A stock engine can still read this project setting as true, but it will not apply the required root_cache_path behavior inside CEF.
++bool IsExplicitCEFRootCachePathEnabled()
++{
++	bool bEnabled = false;
++	if (GConfig)
++	{
++		GConfig->GetBool(TEXT("Browser"), TEXT("bUseExplicitCEFRootCachePath"), bEnabled, GEngineIni);
++	}
++	return bEnabled;
++}
++
++const ANSICHAR* GetCompileTimeCefVersion()
++{
++#if WITH_CEF3 && defined(CEF_VERSION)
++	return CEF_VERSION;
++#else
++	return "unknown";
++#endif
++}
++
++int32 GetCompileTimeChromeVersionMajor()
++{
++#if WITH_CEF3 && defined(CHROME_VERSION_MAJOR)
++	return CHROME_VERSION_MAJOR;
++#else
++	return 0;
++#endif
++}
++
++int32 GetCompileTimeChromeVersionMinor()
++{
++#if WITH_CEF3 && defined(CHROME_VERSION_MINOR)
++	return CHROME_VERSION_MINOR;
++#else
++	return 0;
++#endif
++}
++
++int32 GetCompileTimeChromeVersionBuild()
++{
++#if WITH_CEF3 && defined(CHROME_VERSION_BUILD)
++	return CHROME_VERSION_BUILD;
++#else
++	return 0;
++#endif
++}
++
++int32 GetCompileTimeChromeVersionPatch()
++{
++#if WITH_CEF3 && defined(CHROME_VERSION_PATCH)
++	return CHROME_VERSION_PATCH;
++#else
++	return 0;
++#endif
++}
++
++const TCHAR* GetCefBranchName()
++{
++#if WITH_CEF3 && defined(CEF3_USE_EXPERIMENTAL_VERSION)
++	return CEF3_USE_EXPERIMENTAL_VERSION ? TEXT("experimental") : TEXT("legacy");
++#elif WITH_CEF3
++	return TEXT("unknown-cef3");
++#else
++	return TEXT("no-cef3");
++#endif
++}
++
++FString GetGlobalCefProfilePath()
++{
++#if WITH_CEF3
++	IWebBrowserModule::Get().GetSingleton();
++	const CefRefPtr<CefRequestContext> GlobalContext = CefRequestContext::GetGlobalContext();
++	if (GlobalContext)
++	{
++		const FString ProfilePath = WCHAR_TO_TCHAR(GlobalContext->GetCachePath().ToWString().c_str());
++		return ProfilePath.IsEmpty() ? TEXT("<in-memory>") : FPaths::ConvertRelativePathToFull(ProfilePath);
++	}
++#endif
++
++	return TEXT("<unavailable>");
++}
++
++bool ShouldUseImmutableCefBindingShim()
++{
++	return GetCompileTimeChromeVersionMajor() >= 128;
++}
++
++#if ENGINE_MAJOR_VERSION == 5 && ENGINE_MINOR_VERSION >= 1
++const TCHAR* GetConsoleLogSeverityName(const EWebBrowserConsoleLogSeverity Severity)
++{
++	switch (Severity)
++	{
++		case EWebBrowserConsoleLogSeverity::Default:
++			return TEXT("Default");
++		case EWebBrowserConsoleLogSeverity::Verbose:
++			return TEXT("Verbose");
++		case EWebBrowserConsoleLogSeverity::Debug:
++			return TEXT("Debug");
++		case EWebBrowserConsoleLogSeverity::Info:
++			return TEXT("Info");
++		case EWebBrowserConsoleLogSeverity::Warning:
++			return TEXT("Warning");
++		case EWebBrowserConsoleLogSeverity::Error:
++			return TEXT("Error");
++		case EWebBrowserConsoleLogSeverity::Fatal:
++			return TEXT("Fatal");
++		default:
++			return TEXT("Unknown");
++	}
++}
  #endif
++#endif
++} // namespace
  
  
-@@ -63,6 +64,28 @@ void UImtblBrowserWidget::ExecuteJS(const FString& ScriptText) const
+ UImtblBrowserWidget::UImtblBrowserWidget()
+@@ -25,6 +224,7 @@ void UImtblBrowserWidget::BindConnector()
+ {
+ 	if (JSConnector && JSConnector->IsBound())
+ 	{
++		IMTBL_LOG_FUNC("JSConnector already bound; PageLoaded=%d", IsPageLoaded())
+ 		return;
+ 	}
+ 
+@@ -32,11 +232,17 @@ void UImtblBrowserWidget::BindConnector()
+ 
+ 	if (JSConnector)
+ 	{
+-		if (BindUObject(UImtblJSConnector::JSObjectName(), JSConnector))
++		const bool bBindSucceeded = BindUObject(UImtblJSConnector::JSObjectName(), JSConnector);
++		IMTBL_LOG_FUNC("BindUObject result=%d; PageLoaded=%d", bBindSucceeded, IsPageLoaded())
++		if (bBindSucceeded)
+ 		{
+ 			JSConnector->Init(IsPageLoaded());
+ 		}
+ 	}
++	else
++	{
++		IMTBL_ERR_FUNC("JSConnector is null")
++	}
+ }
+ 
+ TWeakObjectPtr<UImtblJSConnector> UImtblBrowserWidget::GetJSConnector() const
+@@ -63,6 +269,34 @@ void UImtblBrowserWidget::ExecuteJS(const FString& ScriptText) const
  #endif
  }
  
@@ -1018,7 +1320,13 @@ index 43f3d98c556264d0d30ec45c8aa8f2ac4f69590d..b47baf268f3f1baeaf8639d2f8329887
 +{
 +	if (WITH_EDITOR)
 +	{
-+		const FWorldContext* WorldContext = GetGameInstance()->GetWorldContext();
++		UGameInstance* GameInstance = GetGameInstance();
++		if (!GameInstance)
++		{
++			return 0;
++		}
++
++		const FWorldContext* WorldContext = GameInstance->GetWorldContext();
 +		const int32 InstanceID = WorldContext ? WorldContext->PIEInstance : INDEX_NONE;
 +		return InstanceID == INDEX_NONE ? 0 : InstanceID;
 +	}
@@ -1029,7 +1337,7 @@ index 43f3d98c556264d0d30ec45c8aa8f2ac4f69590d..b47baf268f3f1baeaf8639d2f8329887
  void UImtblBrowserWidget::SetBrowserContent()
  {
  #if USING_BUNDLED_CEF
-@@ -71,14 +94,14 @@ void UImtblBrowserWidget::SetBrowserContent()
+@@ -71,14 +305,36 @@ void UImtblBrowserWidget::SetBrowserContent()
  		IMTBL_ERR("Browser widget is not valid")
  		return;
  	}
@@ -1040,66 +1348,141 @@ index 43f3d98c556264d0d30ec45c8aa8f2ac4f69590d..b47baf268f3f1baeaf8639d2f8329887
 +
  	if (FImmutableUtilities::LoadGameBridge(JavaScript))
  	{
- 		FString IndexHtml = FString("<!doctype html><html lang='en'><head><meta " "charset='utf-8'><title>GameSDK Bridge</title><script>") + JavaScript + FString("</script></head><body><h1>Bridge Running</h1></body></html>");
+-		FString IndexHtml = FString("<!doctype html><html lang='en'><head><meta " "charset='utf-8'><title>GameSDK Bridge</title><script>") + JavaScript + FString("</script></head><body><h1>Bridge Running</h1></body></html>");
 -		
 -		WebBrowserWidget->LoadString(IndexHtml, TEXT("file:///immutable/index.html"));	
++		const bool bUseBindingShim = ShouldUseImmutableCefBindingShim();
++		FString IndexHtml = FString(
++								"<!doctype html><html lang='en'><head><meta "
++								"charset='utf-8'><title>GameSDK Bridge</title><script>") +
++							(bUseBindingShim ? FString(ImmutableCefBindingShim) : FString()) + JavaScript +
++							FString("</script></head><body><h1>Bridge Running</h1></body></html>");
 +
-+		WebBrowserWidget->LoadString(IndexHtml, TEXT("file:///immutable/index.html"));
++		IMTBL_LOG_FUNC(
++			"Loading Immutable bridge; Url=%s, CEFVersion=%hs, ChromeVersion=%d.%d.%d.%d, CEFBranch=%s, BindingShim=%s, "
++			"JavaScriptLength=%d",
++			ImmutableBridgeUrl,
++			GetCompileTimeCefVersion(),
++			GetCompileTimeChromeVersionMajor(),
++			GetCompileTimeChromeVersionMinor(),
++			GetCompileTimeChromeVersionBuild(),
++			GetCompileTimeChromeVersionPatch(),
++			GetCefBranchName(),
++			bUseBindingShim ? TEXT("enabled") : TEXT("disabled"),
++			JavaScript.Len())
++
++		WebBrowserWidget->LoadString(IndexHtml, ImmutableBridgeUrl);
++	}
++	else
++	{
++		IMTBL_ERR_FUNC("Failed to load Immutable game bridge JavaScript")
  	}
  #endif
  }
-@@ -113,18 +136,43 @@ TSharedRef<SWidget> UImtblBrowserWidget::RebuildWidget()
+@@ -109,63 +365,147 @@ TSharedRef<SWidget> UImtblBrowserWidget::RebuildWidget()
+ {
+ 	if (IsDesignTime())
+ 	{
+-		return SNew(SBox).HAlign(HAlign_Center).VAlign(VAlign_Center)[SNew(STextBlock).Text(NSLOCTEXT("Immutable", "Immutable Web Browser", "Immutable Web Browser"))];
++		return SNew(SBox)
++			.HAlign(HAlign_Center)
++			.VAlign(VAlign_Center)[SNew(STextBlock).Text(NSLOCTEXT("Immutable", "Immutable Web Browser", "Immutable Web Browser"))];
  	}
  	else
  	{
-+
 +#if WITH_EDITOR
-+		FBrowserContextSettings BrowserContextSettings{FGuid::NewGuid().ToString()};
++		const int32 PIEInstanceIndex = GetWorldUserIndex();
++		const int32 BrowserProfileIndex = PIEInstanceIndex + 1;
++		const FString GlobalProfilePath = GetGlobalCefProfilePath();
++		TOptional<FBrowserContextSettings> BrowserContextSettings;
 +
-+		// Set per PIE window web cache
-+		// BrowserContextSettings.bPersistSessionCookies = false;
-+		const IWebBrowserSingleton* WebBrowserSingleton = IWebBrowserModule::Get().GetSingleton();
++		// Every PIE user receives a stable, isolated, one-based context so editor browsers never use the global profile shared with packaged
++		// games. All browser widgets belonging to one PIE user share a session, while different PIE users remain isolated from each other.
++		//
++		// The Illuvium engine sets CEF's explicit root_cache_path and normalizes Windows paths when bUseExplicitCEFRootCachePath is enabled.
++		// Build each editor profile beside the global Default profile so CEF 128 accepts it as an immediate child of the same root.
++		// Without those engine modifications, CEF rejects the persistent child path and defaults the editor context to in-memory storage.
++		// The resulting "not a child of the root_cache_path" and "cache_path is invalid" errors in cef3.log are expected on a stock engine;
++		// they also mean that the PIE user's browser state will not persist across editor restarts.
++		const FString ContextId = FString::Printf(TEXT("ImmutablePassportPIEUser%d"), BrowserProfileIndex);
++		BrowserContextSettings.Emplace(ContextId);
++		const FString CEFRootPath = FPaths::GetPath(GlobalProfilePath);
++		const bool bHasUsableRoot = IsExplicitCEFRootCachePathEnabled() &&
++			FPaths::GetCleanFilename(GlobalProfilePath).Equals(TEXT("Default"), ESearchCase::IgnoreCase) && !CEFRootPath.IsEmpty() &&
++			!FPaths::IsRelative(CEFRootPath);
 +
-+		// TODO: We can't make a custom name because GenerateWebCacheFolderName is ran on the CookieStorageLocation
-+		// The cache directory must always live under the Saved/webcache_<CHROME_VERSION_BUILD>
-+		const FString DirectoryName = FString::Printf(TEXT("webcache_4430/immutable_%d"), GetWorldUserIndex());
-+		const FString RelativeCachePath(FPaths::Combine(WebBrowserSingleton->ApplicationCacheDir(), DirectoryName));
-+		BrowserContextSettings.CookieStorageLocation = FPaths::ConvertRelativePathToFull(RelativeCachePath);
-+		IMTBL_LOG("CookieStorageLocation: %s", *BrowserContextSettings.CookieStorageLocation);
++		if (bHasUsableRoot)
++		{
++			BrowserContextSettings->CookieStorageLocation = FPaths::Combine(CEFRootPath, ContextId);
++			IMTBL_LOG_FUNC(
++				"Editor browser using persistent isolated CEF profile; ContextId=%s, GlobalProfile=%s, RequestedProfile=%s, "
++				"CEFVersion=%hs, ChromeVersion=%d.%d.%d.%d, CEFBranch=%s, PIEInstanceIndex=%d, BrowserProfileIndex=%d",
++				*ContextId,
++				*GlobalProfilePath,
++				*BrowserContextSettings->CookieStorageLocation,
++				GetCompileTimeCefVersion(),
++				GetCompileTimeChromeVersionMajor(),
++				GetCompileTimeChromeVersionMinor(),
++				GetCompileTimeChromeVersionBuild(),
++				GetCompileTimeChromeVersionPatch(),
++				GetCefBranchName(),
++				PIEInstanceIndex,
++				BrowserProfileIndex)
++		}
++		else
++		{
++			IMTBL_WARN_FUNC(
++				"Editor browser falling back to isolated in-memory CEF profile; ContextId=%s, GlobalProfile=%s, PIEInstanceIndex=%d, "
++				"BrowserProfileIndex=%d",
++				*ContextId,
++				*GlobalProfilePath,
++				PIEInstanceIndex,
++				BrowserProfileIndex)
++		}
 +#endif // WITH_EDITOR
 +
  #if USING_BUNDLED_CEF
 -		WebBrowserWidget = SNew(SWebBrowser).InitialURL(InitialURL).ShowControls(false).SupportsTransparency(bSupportsTransparency).ShowInitialThrobber(bShowInitialThrobber)
 +
 +#if WITH_EDITOR
-+		WebBrowserWidget = SNew(SWebBrowserView).InitialURL(InitialURL).SupportsTransparency(bSupportsTransparency)
++		// Every editor browser receives the isolated, one-based context configured above.
++		WebBrowserWidget = SNew(SWebBrowserView)
++							   .InitialURL(InitialURL)
++							   .SupportsTransparency(bSupportsTransparency)
++							   .ContextSettings(BrowserContextSettings)
 +#else
-+		WebBrowserWidget = SNew(SWebBrowser).InitialURL(InitialURL).ShowControls(false).SupportsTransparency(bSupportsTransparency).ShowInitialThrobber(true)
++		// The global packaged-game profile already persists Passport state and does not need the editor's per-PIE isolation machinery.
++		WebBrowserWidget = SNew(SWebBrowser)
++							   .InitialURL(InitialURL)
++							   .ShowControls(false)
++							   .SupportsTransparency(bSupportsTransparency)
++							   .ShowInitialThrobber(true)
 +#endif // WITH_EDITOR
 +
  #if PLATFORM_ANDROID | PLATFORM_IOS
-             .OnLoadCompleted(
-                 BIND_UOBJECT_DELEGATE(FSimpleDelegate, HandleOnLoadCompleted))
+-            .OnLoadCompleted(
+-                BIND_UOBJECT_DELEGATE(FSimpleDelegate, HandleOnLoadCompleted))
++							   .OnLoadCompleted(BIND_UOBJECT_DELEGATE(FSimpleDelegate, HandleOnLoadCompleted))
  #endif
 -#if ENGINE_MAJOR_VERSION == 5 && ENGINE_MINOR_VERSION >= 1
- 			.OnConsoleMessage(BIND_UOBJECT_DELEGATE(FOnConsoleMessageDelegate, HandleOnConsoleMessage))
+-			.OnConsoleMessage(BIND_UOBJECT_DELEGATE(FOnConsoleMessageDelegate, HandleOnConsoleMessage))
 -#endif
-+
-+#if WITH_EDITOR
-+			.ContextSettings(BrowserContextSettings)
-+#endif // WITH_EDITOR
- 			;
+-			;
++							   .OnConsoleMessage(BIND_UOBJECT_DELEGATE(FOnConsoleMessageDelegate, HandleOnConsoleMessage));
  
  		return WebBrowserWidget.ToSharedRef();
 +
  #else
-     return SNew(SBox)
-         .HAlign(HAlign_Center)
-@@ -132,12 +180,12 @@ TSharedRef<SWidget> UImtblBrowserWidget::RebuildWidget()
-                                    .Text(NSLOCTEXT("Immutable",
-                                                    "Immutable Web Browser",
-                                                    "Immutable Web Browser"))];
+-    return SNew(SBox)
+-        .HAlign(HAlign_Center)
+-        .VAlign(VAlign_Center)[SNew(STextBlock)
+-                                   .Text(NSLOCTEXT("Immutable",
+-                                                   "Immutable Web Browser",
+-                                                   "Immutable Web Browser"))];
 -#endif
++		return SNew(SBox)
++			.HAlign(HAlign_Center)
++			.VAlign(VAlign_Center)[SNew(STextBlock).Text(NSLOCTEXT("Immutable", "Immutable Web Browser", "Immutable Web Browser"))];
 +#endif // USING_BUNDLED_CEF
  	}
  }
@@ -1110,7 +1493,13 @@ index 43f3d98c556264d0d30ec45c8aa8f2ac4f69590d..b47baf268f3f1baeaf8639d2f8329887
  {
  	FString indexUrl = "file:///immutable/index.html";
  
-@@ -150,9 +198,9 @@ void UImtblBrowserWidget::HandleOnLoadCompleted()
+ #if USING_BUNDLED_CEF
+ 	if (WebBrowserWidget->GetUrl() == indexUrl)
+ 	{
++		IMTBL_LOG_FUNC("Mobile bridge loaded expected URL: %s", *indexUrl)
+ 		JSConnector->SetMobileBridgeReady();
+ 	}
+ 	else
  	{
  		IMTBL_ERR("Immutable Browser Widget Url don't match: (loaded : %s, required: %s)", *WebBrowserWidget->GetUrl(), *indexUrl);
  	}
@@ -1122,6 +1511,43 @@ index 43f3d98c556264d0d30ec45c8aa8f2ac4f69590d..b47baf268f3f1baeaf8639d2f8329887
  
  void UImtblBrowserWidget::OnWidgetRebuilt()
  {
+ 	Super::OnWidgetRebuilt();
++	IMTBL_LOG_FUNC("Widget rebuilt; InitialURL=%s", *InitialURL)
+ 	BindConnector();
+ 	SetBrowserContent();
+ }
+ 
+ #if ENGINE_MAJOR_VERSION == 5 && ENGINE_MINOR_VERSION >= 1
+-void UImtblBrowserWidget::HandleOnConsoleMessage(const FString& Message, const FString& Source, int32 Line, EWebBrowserConsoleLogSeverity Severity)
++void UImtblBrowserWidget::HandleOnConsoleMessage(
++	const FString& Message, const FString& Source, int32 Line, EWebBrowserConsoleLogSeverity Severity)
+ {
+-	// TODO: add severity to log and callback
+-	IMTBL_LOG("Browser console message: %s, Source: %s, Line: %d", *Message, *Source, Line);
++	const TCHAR* SeverityName = GetConsoleLogSeverityName(Severity);
++	switch (Severity)
++	{
++		case EWebBrowserConsoleLogSeverity::Fatal:
++			// Browser fatal severity describes the JavaScript console message; Unreal Fatal would terminate the process.
++		case EWebBrowserConsoleLogSeverity::Error:
++			IMTBL_ERR("Browser console message [%s]: %s, Source: %s, Line: %d", SeverityName, *Message, *Source, Line)
++			break;
++		case EWebBrowserConsoleLogSeverity::Warning:
++			IMTBL_WARN("Browser console message [%s]: %s, Source: %s, Line: %d", SeverityName, *Message, *Source, Line)
++			break;
++		case EWebBrowserConsoleLogSeverity::Verbose:
++		case EWebBrowserConsoleLogSeverity::Debug:
++			IMTBL_VERBOSE("Browser console message [%s]: %s, Source: %s, Line: %d", SeverityName, *Message, *Source, Line)
++			break;
++		case EWebBrowserConsoleLogSeverity::Default:
++		case EWebBrowserConsoleLogSeverity::Info:
++		default:
++			IMTBL_LOG("Browser console message [%s]: %s, Source: %s, Line: %d", SeverityName, *Message, *Source, Line)
++			break;
++	}
+ 	OnConsoleMessage.Broadcast(Message, Source, Line);
+ }
+ #endif
 diff --git a/Source/Immutable/Private/Immutable/ImtblBrowserWidget.h b/Source/Immutable/Private/Immutable/ImtblBrowserWidget.h
 index bc70d4bb9f10ab2a92deacea5631597ee1582885..86bc2cd8f6315c225b61f78346ef453038f886bb 100644
 --- a/Source/Immutable/Private/Immutable/ImtblBrowserWidget.h

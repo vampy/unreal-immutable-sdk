@@ -270,7 +270,9 @@ FString UImmutablePassport::GetResponseResultAsString(const FImtblJSResponse& Re
 		return "";
 	}
 
-	return Response.JsonObject->GetStringField(TEXT("result"));
+	FString Result;
+	Response.JsonObject->TryGetStringField(TEXT("result"), Result);
+	return Result;
 }
 
 bool UImmutablePassport::GetResponseResultAsBool(const FImtblJSResponse& Response)
@@ -630,14 +632,21 @@ void UImmutablePassport::OnBridgeCallbackResponse(FImtblJSResponse Response)
 		return;
 	}
 
-	if (!Response.success)
+	FString Error;
+	if (Response.Error.IsSet())
 	{
-		IMTBL_LOG_FUNC("Response for %s is unsuccessfull", *Response.responseFor);
+		Error = Response.Error->ToString();
+	}
+	else if (Response.JsonObject.IsValid())
+	{
+		Response.JsonObject->TryGetStringField(TEXT("error"), Error);
 	}
 
-	FString Error;
-
-	Response.JsonObject->TryGetStringField(TEXT("error"), Error);
+	if (!Response.success)
+	{
+		const FString ErrorMessage = Error.IsEmpty() ? TEXT("<none provided>") : Error;
+		IMTBL_ERR_FUNC("Bridge request failed; Action=%s, RequestId=%s, Error=%s", *Response.responseFor, *Response.requestId, *ErrorMessage);
+	}
 
 	ResponseDelegate->ExecuteIfBound(FImmutablePassportResult{ Response.success, Error, Response });
 }

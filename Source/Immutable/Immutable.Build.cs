@@ -59,6 +59,12 @@ public class Immutable : ModuleRules
 
 #if UE_5_1_OR_LATER
 			PrivateDependencyModuleNames.Add("WebBrowser");
+			if (Target.Platform == UnrealTargetPlatform.Win64
+				|| Target.Platform == UnrealTargetPlatform.Mac
+				|| Target.Platform == UnrealTargetPlatform.Linux)
+			{
+				AddEngineThirdPartyPrivateStaticDependencies(Target, "CEF3");
+			}
 			PublicDefinitions.Add("USING_BUNDLED_CEF=1");
 			PublicDefinitions.Add("USING_BLUI_CEF=0");
 #else
