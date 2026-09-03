@@ -678,7 +678,7 @@ index 67478492525f2457e09cb338d13940f54186da53..67eb3af7f8e2b42454b29c9d15a9dd5a
 +
 +#undef LOCTEXT_NAMESPACE
 diff --git a/Source/Immutable/Private/Immutable/Browser/ImmutableJSConnectorBrowserWidget.cpp b/Source/Immutable/Private/Immutable/Browser/ImmutableJSConnectorBrowserWidget.cpp
-index 23d0adeec1d2ec84a4c938ecc308faef36e1254e..95cede3b324a8e23d232c8921f6b15b1021fce0a 100644
+index 23d0adeec1d2ec84a4c938ecc308faef36e1254e..396e3e9dfefdcaa36b87c8b4779a9965bcfd2755 100644
 --- a/Source/Immutable/Private/Immutable/Browser/ImmutableJSConnectorBrowserWidget.cpp
 +++ b/Source/Immutable/Private/Immutable/Browser/ImmutableJSConnectorBrowserWidget.cpp
 @@ -1,6 +1,107 @@
@@ -768,7 +768,7 @@ index 23d0adeec1d2ec84a4c938ecc308faef36e1254e..95cede3b324a8e23d232c8921f6b15b1
 +})();
 +)JS");
 +
-+int32 GetCompileTimeChromeVersionMajor()
++int32 GetJSConnectorCompileTimeChromeVersionMajor()
 +{
 +#if WITH_CEF3 && defined(CHROME_VERSION_MAJOR)
 +	return CHROME_VERSION_MAJOR;
@@ -777,7 +777,7 @@ index 23d0adeec1d2ec84a4c938ecc308faef36e1254e..95cede3b324a8e23d232c8921f6b15b1
 +#endif
 +}
 +
-+const ANSICHAR* GetCompileTimeCefVersion()
++const ANSICHAR* GetJSConnectorCompileTimeCefVersion()
 +{
 +#if WITH_CEF3 && defined(CEF_VERSION)
 +	return CEF_VERSION;
@@ -785,11 +785,11 @@ index 23d0adeec1d2ec84a4c938ecc308faef36e1254e..95cede3b324a8e23d232c8921f6b15b1
 +	return "unknown";
 +#endif
 +}
-+} // namespace
++}	 // namespace
  
  void UImmutableJSConnectorBrowserWidget::PostInitProperties()
  {
-@@ -18,6 +119,27 @@ UImtblJSConnector* UImmutableJSConnectorBrowserWidget::GetJSConnector() const
+@@ -18,6 +119,31 @@ UImtblJSConnector* UImmutableJSConnectorBrowserWidget::GetJSConnector() const
  	return JSConnector;
  }
  
@@ -803,13 +803,17 @@ index 23d0adeec1d2ec84a4c938ecc308faef36e1254e..95cede3b324a8e23d232c8921f6b15b1
 +		return;
 +	}
 +
-+	const bool bUseBindingShim = GetCompileTimeChromeVersionMajor() >= 128;
-+	const FString IndexHtml = FString(
-+		"<!doctype html><html lang='en'><head><meta charset='utf-8'><title>GameSDK Bridge</title><script>")
-+		+ (bUseBindingShim ? FString(ImmutableCefBindingShim) : FString()) + JavaScript
-+		+ FString("</script></head><body><h1>Bridge Running</h1></body></html>");
-+	IMTBL_LOG_FUNC("Loading Immutable bridge; Url=%s, CEFVersion=%hs, ChromeMajor=%d, BindingShim=%d, JavaScriptLength=%d",
-+		ImmutableBridgeUrl, GetCompileTimeCefVersion(), GetCompileTimeChromeVersionMajor(), bUseBindingShim, JavaScript.Len())
++	const bool bUseBindingShim = GetJSConnectorCompileTimeChromeVersionMajor() >= 128;
++	const FString IndexHtml = FString("<!doctype html><html lang='en'><head><meta charset='utf-8'><title>GameSDK Bridge</title><script>") +
++							  (bUseBindingShim ? FString(ImmutableCefBindingShim) : FString()) + JavaScript +
++							  FString("</script></head><body><h1>Bridge Running</h1></body></html>");
++	IMTBL_LOG_FUNC(
++		"Loading Immutable bridge; Url=%s, CEFVersion=%hs, ChromeMajor=%d, BindingShim=%d, JavaScriptLength=%d",
++		ImmutableBridgeUrl,
++		GetJSConnectorCompileTimeCefVersion(),
++		GetJSConnectorCompileTimeChromeVersionMajor(),
++		bUseBindingShim,
++		JavaScript.Len())
 +	LoadString(IndexHtml, ImmutableBridgeUrl);
 +#endif
 +}
@@ -817,7 +821,7 @@ index 23d0adeec1d2ec84a4c938ecc308faef36e1254e..95cede3b324a8e23d232c8921f6b15b1
  void UImmutableJSConnectorBrowserWidget::ExecuteJavaScript(const FString& ScriptText) const
  {
  #if USING_BUNDLED_CEF
-@@ -31,16 +153,22 @@ void UImmutableJSConnectorBrowserWidget::ExecuteJavaScript(const FString& Script
+@@ -31,16 +157,22 @@ void UImmutableJSConnectorBrowserWidget::ExecuteJavaScript(const FString& Script
  bool UImmutableJSConnectorBrowserWidget::BindUObject(const FString& Name, UObject* Object, bool bIsPermanent) const
  {
  #if USING_BUNDLED_CEF
@@ -843,7 +847,7 @@ index 23d0adeec1d2ec84a4c938ecc308faef36e1254e..95cede3b324a8e23d232c8921f6b15b1
  }
  
  void UImmutableJSConnectorBrowserWidget::OnBrowserCreated()
-@@ -54,14 +182,21 @@ void UImmutableJSConnectorBrowserWidget::SetupJavaScriptBindings()
+@@ -54,14 +186,21 @@ void UImmutableJSConnectorBrowserWidget::SetupJavaScriptBindings()
  {
  	if (JSConnector && JSConnector->IsBound())
  	{
@@ -869,7 +873,7 @@ index 23d0adeec1d2ec84a4c938ecc308faef36e1254e..95cede3b324a8e23d232c8921f6b15b1
 +	}
 +}
 diff --git a/Source/Immutable/Private/Immutable/ImmutablePassport.cpp b/Source/Immutable/Private/Immutable/ImmutablePassport.cpp
-index 5f4f6d471a13fd35e8ef909584e252a65cf8ae2d..27385e31f0f894a1134c230e2513dfd764bb600e 100644
+index 5f4f6d471a13fd35e8ef909584e252a65cf8ae2d..c287c5324d2730cb4a77f17d1cb9e1cc5bc85c99 100644
 --- a/Source/Immutable/Private/Immutable/ImmutablePassport.cpp
 +++ b/Source/Immutable/Private/Immutable/ImmutablePassport.cpp
 @@ -2,6 +2,8 @@
@@ -1021,7 +1025,7 @@ index 5f4f6d471a13fd35e8ef909584e252a65cf8ae2d..27385e31f0f894a1134c230e2513dfd7
  
  		IMTBL_ERR("%s", *Message)
  		ResponseDelegate->ExecuteIfBound(FImmutablePassportResult{ Response.success, Message, Response });
-@@ -403,28 +439,9 @@ void UImmutablePassport::OnLogoutResponse(FImtblJSResponse Response)
+@@ -403,32 +439,15 @@ void UImmutablePassport::OnLogoutResponse(FImtblJSResponse Response)
  		return;
  	}
  
@@ -1051,7 +1055,13 @@ index 5f4f6d471a13fd35e8ef909584e252a65cf8ae2d..27385e31f0f894a1134c230e2513dfd7
  
  	if (!Url.IsEmpty())
  	{
-@@ -436,7 +453,14 @@ void UImmutablePassport::OnLogoutResponse(FImtblJSResponse Response)
++#if PLATFORM_ANDROID || PLATFORM_IOS || PLATFORM_MAC || PLATFORM_WINDOWS
+ 		OnHandleDeepLink.AddUObject(this, &UImmutablePassport::OnDeepLinkActivated);
++#endif
+ #if PLATFORM_ANDROID
+ 		LaunchAndroidUrl(Url);
+ #elif PLATFORM_IOS
+@@ -436,7 +455,14 @@ void UImmutablePassport::OnLogoutResponse(FImtblJSResponse Response)
  #elif PLATFORM_MAC
  		[[ImmutableMac instance] launchUrl:TCHAR_TO_ANSI(*Url) forRedirectUri:TCHAR_TO_ANSI(*InitData.logoutRedirectUri)];
  #elif PLATFORM_WINDOWS
@@ -1067,7 +1077,7 @@ index 5f4f6d471a13fd35e8ef909584e252a65cf8ae2d..27385e31f0f894a1134c230e2513dfd7
  #endif
  	}
  	else
-@@ -451,39 +475,40 @@ void UImmutablePassport::OnGetAuthUrlResponse(FImtblJSResponse Response)
+@@ -451,39 +477,40 @@ void UImmutablePassport::OnGetAuthUrlResponse(FImtblJSResponse Response)
  {
  	if (PKCEResponseDelegate.IsBound())
  	{
@@ -1133,7 +1143,7 @@ index 5f4f6d471a13fd35e8ef909584e252a65cf8ae2d..27385e31f0f894a1134c230e2513dfd7
  	}
  	else
  	{
-@@ -506,7 +531,7 @@ void UImmutablePassport::OnConnectResponse(FImtblJSResponse Response)
+@@ -506,7 +533,7 @@ void UImmutablePassport::OnConnectResponse(FImtblJSResponse Response)
  		{
  			IMTBL_WARN("Connect PKCE attempt failed.");
  			ResetStateFlags(IPS_PKCE);
@@ -1142,7 +1152,17 @@ index 5f4f6d471a13fd35e8ef909584e252a65cf8ae2d..27385e31f0f894a1134c230e2513dfd7
  		}
  		Analytics->Track(UImmutableAnalytics::EEventName::COMPLETE_LOGIN_PKCE, Response.success);
  		PKCEResponseDelegate.ExecuteIfBound(FImmutablePassportResult{Response.success, Msg, Response});
-@@ -536,15 +561,13 @@ void UImmutablePassport::OnBridgeCallbackResponse(FImtblJSResponse Response)
+@@ -523,8 +550,7 @@ void UImmutablePassport::OnConnectResponse(FImtblJSResponse Response)
+ 	}
+ 	ResetStateFlags(IPS_COMPLETING_PKCE);
+ }
+-
+-
++#endif
+ 
+ void UImmutablePassport::OnBridgeCallbackResponse(FImtblJSResponse Response)
+ {
+@@ -536,15 +562,13 @@ void UImmutablePassport::OnBridgeCallbackResponse(FImtblJSResponse Response)
  		return;
  	}
  
@@ -1161,7 +1181,7 @@ index 5f4f6d471a13fd35e8ef909584e252a65cf8ae2d..27385e31f0f894a1134c230e2513dfd7
  	ResponseDelegate->ExecuteIfBound(FImmutablePassportResult{ Response.success, Error, Response });
  }
  
-@@ -566,23 +589,62 @@ bool UImmutablePassport::IsStateFlagsSet(uint8 StateIn) const
+@@ -566,40 +590,84 @@ bool UImmutablePassport::IsStateFlagsSet(uint8 StateIn) const
  void UImmutablePassport::SavePassportSettings()
  {
  	UImmutableSaveGame* SaveGameInstance = Cast<UImmutableSaveGame>(UGameplayStatics::CreateSaveGameObject(UImmutableSaveGame::StaticClass()));
@@ -1227,8 +1247,73 @@ index 5f4f6d471a13fd35e8ef909584e252a65cf8ae2d..27385e31f0f894a1134c230e2513dfd7
 +
  void UImmutablePassport::OnDeepLinkActivated(const FString& DeepLink)
  {
++#if PLATFORM_ANDROID || PLATFORM_IOS || PLATFORM_MAC || PLATFORM_WINDOWS
  	OnHandleDeepLink.Clear();
-@@ -747,4 +809,4 @@ void UImmutablePassport::LaunchAndroidUrl(FString Url)
+ 	if (DeepLink.StartsWith(InitData.logoutRedirectUri))
+ 	{
+ 		// execute on game thread to prevent call to Passport instance from another thread
+ 		if (FTaskGraphInterface::IsRunning())
+ 		{
+-			FGraphEventRef GameThreadTask = FFunctionGraphTask::CreateAndDispatchWhenReady([this]()
+-			{
+-				Analytics->Track(UImmutableAnalytics::EEventName::COMPLETE_LOGOUT_PKCE);
+-				IMTBL_LOG("Complete Logout PKCE")
+-				PKCELogoutResponseDelegate.ExecuteIfBound(FImmutablePassportResult{true, "Logged out"});
+-				PKCELogoutResponseDelegate = nullptr;
+-				ResetStateFlags(IPS_CONNECTED | IPS_PKCE);
+-				SavePassportSettings();
+-			}, TStatId(), nullptr, ENamedThreads::GameThread);
++			FGraphEventRef GameThreadTask = FFunctionGraphTask::CreateAndDispatchWhenReady(
++				[this]()
++				{
++					Analytics->Track(UImmutableAnalytics::EEventName::COMPLETE_LOGOUT_PKCE);
++					IMTBL_LOG("Complete Logout PKCE")
++					PKCELogoutResponseDelegate.ExecuteIfBound(FImmutablePassportResult{true, "Logged out"});
++					PKCELogoutResponseDelegate = nullptr;
++					ResetStateFlags(IPS_CONNECTED | IPS_PKCE);
++					SavePassportSettings();
++				},
++				TStatId(),
++				nullptr,
++				ENamedThreads::GameThread);
+ 		}
+ 	}
+ 	else if (DeepLink.StartsWith(InitData.redirectUri))
+@@ -608,8 +676,10 @@ void UImmutablePassport::OnDeepLinkActivated(const FString& DeepLink)
+ 	}
+ 
+ 	PKCEData = nullptr;
++#endif
+ }
+ 
++#if PLATFORM_ANDROID || PLATFORM_IOS || PLATFORM_MAC || PLATFORM_WINDOWS
+ void UImmutablePassport::CompleteLoginFlow(FString Url)
+ {
+ 	// Required mainly for Android to detect when Chrome Custom tabs is dismissed
+@@ -659,11 +729,11 @@ void UImmutablePassport::CompleteLoginFlow(FString Url)
+ }
+ #endif
+ 
+-#if PLATFORM_ANDROID | PLATFORM_WINDOWS
++#if PLATFORM_ANDROID || PLATFORM_IOS || PLATFORM_MAC || PLATFORM_WINDOWS
++#if PLATFORM_ANDROID || PLATFORM_WINDOWS
+ // Called from Android JNI
+ void UImmutablePassport::HandleDeepLink(FString DeepLink) const
+-#endif
+-#if PLATFORM_IOS | PLATFORM_MAC
++#else
+ // Called from iOS Objective C
+ void UImmutablePassport::HandleDeepLink(NSString* sDeepLink) const
+ #endif
+@@ -681,6 +751,7 @@ void UImmutablePassport::HandleDeepLink(NSString* sDeepLink) const
+ 
+ 	OnHandleDeepLink.Broadcast(DeepLink);
+ }
++#endif
+ 
+ #if PLATFORM_ANDROID
+ void UImmutablePassport::HandleOnLoginPKCEDismissed()
+@@ -747,4 +818,4 @@ void UImmutablePassport::LaunchAndroidUrl(FString Url)
  		CallJniStaticVoidMethod(Env, jimmutableAndroidClass, jlaunchUrl, FJavaWrapper::GameActivityThis, jurl);
  	}
  }
