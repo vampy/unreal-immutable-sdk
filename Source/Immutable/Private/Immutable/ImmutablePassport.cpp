@@ -445,7 +445,9 @@ void UImmutablePassport::OnLogoutResponse(FImtblJSResponse Response)
 
 	if (!Url.IsEmpty())
 	{
+#if PLATFORM_ANDROID || PLATFORM_IOS || PLATFORM_MAC || PLATFORM_WINDOWS
 		OnHandleDeepLink.AddUObject(this, &UImmutablePassport::OnDeepLinkActivated);
+#endif
 #if PLATFORM_ANDROID
 		LaunchAndroidUrl(Url);
 #elif PLATFORM_IOS
@@ -548,8 +550,7 @@ void UImmutablePassport::OnConnectResponse(FImtblJSResponse Response)
 	}
 	ResetStateFlags(IPS_COMPLETING_PKCE);
 }
-
-
+#endif
 
 void UImmutablePassport::OnBridgeCallbackResponse(FImtblJSResponse Response)
 {
@@ -647,21 +648,26 @@ void UImmutablePassport::LaunchURL(const FString& URL, const FString& Params, FS
 
 void UImmutablePassport::OnDeepLinkActivated(const FString& DeepLink)
 {
+#if PLATFORM_ANDROID || PLATFORM_IOS || PLATFORM_MAC || PLATFORM_WINDOWS
 	OnHandleDeepLink.Clear();
 	if (DeepLink.StartsWith(InitData.logoutRedirectUri))
 	{
 		// execute on game thread to prevent call to Passport instance from another thread
 		if (FTaskGraphInterface::IsRunning())
 		{
-			FGraphEventRef GameThreadTask = FFunctionGraphTask::CreateAndDispatchWhenReady([this]()
-			{
-				Analytics->Track(UImmutableAnalytics::EEventName::COMPLETE_LOGOUT_PKCE);
-				IMTBL_LOG("Complete Logout PKCE")
-				PKCELogoutResponseDelegate.ExecuteIfBound(FImmutablePassportResult{true, "Logged out"});
-				PKCELogoutResponseDelegate = nullptr;
-				ResetStateFlags(IPS_CONNECTED | IPS_PKCE);
-				SavePassportSettings();
-			}, TStatId(), nullptr, ENamedThreads::GameThread);
+			FGraphEventRef GameThreadTask = FFunctionGraphTask::CreateAndDispatchWhenReady(
+				[this]()
+				{
+					Analytics->Track(UImmutableAnalytics::EEventName::COMPLETE_LOGOUT_PKCE);
+					IMTBL_LOG("Complete Logout PKCE")
+					PKCELogoutResponseDelegate.ExecuteIfBound(FImmutablePassportResult{true, "Logged out"});
+					PKCELogoutResponseDelegate = nullptr;
+					ResetStateFlags(IPS_CONNECTED | IPS_PKCE);
+					SavePassportSettings();
+				},
+				TStatId(),
+				nullptr,
+				ENamedThreads::GameThread);
 		}
 	}
 	else if (DeepLink.StartsWith(InitData.redirectUri))
@@ -670,8 +676,10 @@ void UImmutablePassport::OnDeepLinkActivated(const FString& DeepLink)
 	}
 
 	PKCEData = nullptr;
+#endif
 }
 
+#if PLATFORM_ANDROID || PLATFORM_IOS || PLATFORM_MAC || PLATFORM_WINDOWS
 void UImmutablePassport::CompleteLoginFlow(FString Url)
 {
 	// Required mainly for Android to detect when Chrome Custom tabs is dismissed
@@ -721,11 +729,11 @@ void UImmutablePassport::CompleteLoginFlow(FString Url)
 }
 #endif
 
-#if PLATFORM_ANDROID | PLATFORM_WINDOWS
+#if PLATFORM_ANDROID || PLATFORM_IOS || PLATFORM_MAC || PLATFORM_WINDOWS
+#if PLATFORM_ANDROID || PLATFORM_WINDOWS
 // Called from Android JNI
 void UImmutablePassport::HandleDeepLink(FString DeepLink) const
-#endif
-#if PLATFORM_IOS | PLATFORM_MAC
+#else
 // Called from iOS Objective C
 void UImmutablePassport::HandleDeepLink(NSString* sDeepLink) const
 #endif
@@ -743,6 +751,7 @@ void UImmutablePassport::HandleDeepLink(NSString* sDeepLink) const
 
 	OnHandleDeepLink.Broadcast(DeepLink);
 }
+#endif
 
 #if PLATFORM_ANDROID
 void UImmutablePassport::HandleOnLoginPKCEDismissed()

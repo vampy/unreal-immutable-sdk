@@ -84,7 +84,7 @@ const TCHAR* ImmutableCefBindingShim = TEXT(R"JS(
 })();
 )JS");
 
-int32 GetCompileTimeChromeVersionMajor()
+int32 GetJSConnectorCompileTimeChromeVersionMajor()
 {
 #if WITH_CEF3 && defined(CHROME_VERSION_MAJOR)
 	return CHROME_VERSION_MAJOR;
@@ -93,7 +93,7 @@ int32 GetCompileTimeChromeVersionMajor()
 #endif
 }
 
-const ANSICHAR* GetCompileTimeCefVersion()
+const ANSICHAR* GetJSConnectorCompileTimeCefVersion()
 {
 #if WITH_CEF3 && defined(CEF_VERSION)
 	return CEF_VERSION;
@@ -101,7 +101,7 @@ const ANSICHAR* GetCompileTimeCefVersion()
 	return "unknown";
 #endif
 }
-} // namespace
+}	 // namespace
 
 void UImmutableJSConnectorBrowserWidget::PostInitProperties()
 {
@@ -129,13 +129,17 @@ void UImmutableJSConnectorBrowserWidget::LoadGameBridge()
 		return;
 	}
 
-	const bool bUseBindingShim = GetCompileTimeChromeVersionMajor() >= 128;
-	const FString IndexHtml = FString(
-		"<!doctype html><html lang='en'><head><meta charset='utf-8'><title>GameSDK Bridge</title><script>")
-		+ (bUseBindingShim ? FString(ImmutableCefBindingShim) : FString()) + JavaScript
-		+ FString("</script></head><body><h1>Bridge Running</h1></body></html>");
-	IMTBL_LOG_FUNC("Loading Immutable bridge; Url=%s, CEFVersion=%hs, ChromeMajor=%d, BindingShim=%d, JavaScriptLength=%d",
-		ImmutableBridgeUrl, GetCompileTimeCefVersion(), GetCompileTimeChromeVersionMajor(), bUseBindingShim, JavaScript.Len())
+	const bool bUseBindingShim = GetJSConnectorCompileTimeChromeVersionMajor() >= 128;
+	const FString IndexHtml = FString("<!doctype html><html lang='en'><head><meta charset='utf-8'><title>GameSDK Bridge</title><script>") +
+							  (bUseBindingShim ? FString(ImmutableCefBindingShim) : FString()) + JavaScript +
+							  FString("</script></head><body><h1>Bridge Running</h1></body></html>");
+	IMTBL_LOG_FUNC(
+		"Loading Immutable bridge; Url=%s, CEFVersion=%hs, ChromeMajor=%d, BindingShim=%d, JavaScriptLength=%d",
+		ImmutableBridgeUrl,
+		GetJSConnectorCompileTimeCefVersion(),
+		GetJSConnectorCompileTimeChromeVersionMajor(),
+		bUseBindingShim,
+		JavaScript.Len())
 	LoadString(IndexHtml, ImmutableBridgeUrl);
 #endif
 }
