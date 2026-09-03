@@ -873,7 +873,7 @@ index 23d0adeec1d2ec84a4c938ecc308faef36e1254e..396e3e9dfefdcaa36b87c8b4779a9965
 +	}
 +}
 diff --git a/Source/Immutable/Private/Immutable/ImmutablePassport.cpp b/Source/Immutable/Private/Immutable/ImmutablePassport.cpp
-index 5f4f6d471a13fd35e8ef909584e252a65cf8ae2d..c287c5324d2730cb4a77f17d1cb9e1cc5bc85c99 100644
+index 5f4f6d471a13fd35e8ef909584e252a65cf8ae2d..c68fa914e3bfe0bc403af15f6f30d717373cbe8f 100644
 --- a/Source/Immutable/Private/Immutable/ImmutablePassport.cpp
 +++ b/Source/Immutable/Private/Immutable/ImmutablePassport.cpp
 @@ -2,6 +2,8 @@
@@ -922,7 +922,26 @@ index 5f4f6d471a13fd35e8ef909584e252a65cf8ae2d..c287c5324d2730cb4a77f17d1cb9e1cc
  void UImmutablePassport::Initialize(const FImmutablePassportInitData& Data, const FImtblPassportResponseDelegate& ResponseDelegate)
  {
  	check(JSConnector.IsValid());
-@@ -227,24 +252,22 @@ void UImmutablePassport::HasStoredCredentials(const FImtblPassportResponseDelega
+@@ -129,6 +154,18 @@ void UImmutablePassport::Connect(const FImtblPassportResponseDelegate& ResponseD
+ 
+ 	CallJS(ImmutablePassportAction::GetPKCEAuthUrl, PKCERequestJson, PKCEResponseDelegate, FImtblJSResponseDelegate::CreateUObject(this, &UImmutablePassport::OnGetAuthUrlResponse));
+ }
++
++void UImmutablePassport::Relogin(const FImtblPassportResponseDelegate& ResponseDelegate)
++{
++	if (!CheckIsInitialized(ImmutablePassportAction::Relogin, ResponseDelegate))
++	{
++		return;
++	}
++
++	SetStateFlags(IPS_CONNECTING);
++	CallJS(ImmutablePassportAction::Relogin, TEXT(""), ResponseDelegate,
++		FImtblJSResponseDelegate::CreateUObject(this, &ThisClass::OnReloginResponse), false);
++}
+ #endif
+ 
+ void UImmutablePassport::Logout(bool DoHardLogout, const FImtblPassportResponseDelegate& ResponseDelegate)
+@@ -227,24 +264,22 @@ void UImmutablePassport::HasStoredCredentials(const FImtblPassportResponseDelega
  	// check access token
  	CallJS(ImmutablePassportAction::GetAccessToken, TEXT(""), ResponseDelegate, FImtblJSResponseDelegate::CreateLambda([this, ResponseDelegate](FImtblJSResponse Response)
  	{
@@ -953,7 +972,7 @@ index 5f4f6d471a13fd35e8ef909584e252a65cf8ae2d..c287c5324d2730cb4a77f17d1cb9e1cc
  				}
  				else
  				{
-@@ -264,7 +287,9 @@ FString UImmutablePassport::GetResponseResultAsString(const FImtblJSResponse& Re
+@@ -264,7 +299,9 @@ FString UImmutablePassport::GetResponseResultAsString(const FImtblJSResponse& Re
  		return "";	
  	}
  
@@ -964,7 +983,7 @@ index 5f4f6d471a13fd35e8ef909584e252a65cf8ae2d..c287c5324d2730cb4a77f17d1cb9e1cc
  }
  
  bool UImmutablePassport::GetResponseResultAsBool(const FImtblJSResponse& Response)
-@@ -276,7 +301,9 @@ bool UImmutablePassport::GetResponseResultAsBool(const FImtblJSResponse& Respons
+@@ -276,7 +313,9 @@ bool UImmutablePassport::GetResponseResultAsBool(const FImtblJSResponse& Respons
  		return false;	
  	}
  
@@ -975,7 +994,7 @@ index 5f4f6d471a13fd35e8ef909584e252a65cf8ae2d..c287c5324d2730cb4a77f17d1cb9e1cc
  }
  
  TArray<FString> UImmutablePassport::GetResponseResultAsStringArray(const FImtblJSResponse& Response)
-@@ -289,10 +316,19 @@ TArray<FString> UImmutablePassport::GetResponseResultAsStringArray(const FImtblJ
+@@ -289,10 +328,19 @@ TArray<FString> UImmutablePassport::GetResponseResultAsStringArray(const FImtblJ
  	}
  	
  	TArray<FString> StringArray;
@@ -983,13 +1002,13 @@ index 5f4f6d471a13fd35e8ef909584e252a65cf8ae2d..c287c5324d2730cb4a77f17d1cb9e1cc
 -	for (const TSharedPtr<FJsonValue>& Value : Response.JsonObject->GetArrayField(TEXT("result")))
 +	const TArray<TSharedPtr<FJsonValue>>* Values = nullptr;
 +	if (!Response.JsonObject->TryGetArrayField(TEXT("result"), Values) || !Values)
- 	{
--		StringArray.Add(Value->AsString());
++	{
 +		return StringArray;
 +	}
 +
 +	for (const TSharedPtr<FJsonValue>& Value : *Values)
-+	{
+ 	{
+-		StringArray.Add(Value->AsString());
 +		FString StringValue;
 +		if (Value.IsValid() && Value->TryGetString(StringValue))
 +		{
@@ -998,7 +1017,7 @@ index 5f4f6d471a13fd35e8ef909584e252a65cf8ae2d..c287c5324d2730cb4a77f17d1cb9e1cc
  	}
  
  	return StringArray;
-@@ -345,7 +381,7 @@ TOptional<UImmutablePassport::FImtblPassportResponseDelegate> UImmutablePassport
+@@ -345,7 +393,7 @@ TOptional<UImmutablePassport::FImtblPassportResponseDelegate> UImmutablePassport
  	FImtblPassportResponseDelegate ResponseDelegate;
  	if (!ResponseDelegates.RemoveAndCopyValue(Response.requestId, ResponseDelegate))
  	{
@@ -1007,7 +1026,7 @@ index 5f4f6d471a13fd35e8ef909584e252a65cf8ae2d..c287c5324d2730cb4a77f17d1cb9e1cc
  		return TOptional<FImtblPassportResponseDelegate>();
  	}
  	return ResponseDelegate;
-@@ -365,7 +401,7 @@ void UImmutablePassport::OnInitializeResponse(FImtblJSResponse Response)
+@@ -365,7 +413,7 @@ void UImmutablePassport::OnInitializeResponse(FImtblJSResponse Response)
  		else
  		{
  			IMTBL_ERR("Passport initialization failed.")
@@ -1016,7 +1035,7 @@ index 5f4f6d471a13fd35e8ef909584e252a65cf8ae2d..c287c5324d2730cb4a77f17d1cb9e1cc
  		}
  		Analytics->Track(UImmutableAnalytics::EEventName::INIT_PASSPORT, Response.success);
  		ResponseDelegate->ExecuteIfBound(FImmutablePassportResult { Response.success, Error, Response });
-@@ -387,7 +423,7 @@ void UImmutablePassport::OnLogoutResponse(FImtblJSResponse Response)
+@@ -387,7 +435,7 @@ void UImmutablePassport::OnLogoutResponse(FImtblJSResponse Response)
  
  	if (!Response.success)
  	{
@@ -1025,7 +1044,7 @@ index 5f4f6d471a13fd35e8ef909584e252a65cf8ae2d..c287c5324d2730cb4a77f17d1cb9e1cc
  
  		IMTBL_ERR("%s", *Message)
  		ResponseDelegate->ExecuteIfBound(FImmutablePassportResult{ Response.success, Message, Response });
-@@ -403,32 +439,15 @@ void UImmutablePassport::OnLogoutResponse(FImtblJSResponse Response)
+@@ -403,32 +451,15 @@ void UImmutablePassport::OnLogoutResponse(FImtblJSResponse Response)
  		return;
  	}
  
@@ -1061,7 +1080,7 @@ index 5f4f6d471a13fd35e8ef909584e252a65cf8ae2d..c287c5324d2730cb4a77f17d1cb9e1cc
  #if PLATFORM_ANDROID
  		LaunchAndroidUrl(Url);
  #elif PLATFORM_IOS
-@@ -436,7 +455,14 @@ void UImmutablePassport::OnLogoutResponse(FImtblJSResponse Response)
+@@ -436,7 +467,14 @@ void UImmutablePassport::OnLogoutResponse(FImtblJSResponse Response)
  #elif PLATFORM_MAC
  		[[ImmutableMac instance] launchUrl:TCHAR_TO_ANSI(*Url) forRedirectUri:TCHAR_TO_ANSI(*InitData.logoutRedirectUri)];
  #elif PLATFORM_WINDOWS
@@ -1077,7 +1096,7 @@ index 5f4f6d471a13fd35e8ef909584e252a65cf8ae2d..c287c5324d2730cb4a77f17d1cb9e1cc
  #endif
  	}
  	else
-@@ -451,39 +477,40 @@ void UImmutablePassport::OnGetAuthUrlResponse(FImtblJSResponse Response)
+@@ -451,39 +489,40 @@ void UImmutablePassport::OnGetAuthUrlResponse(FImtblJSResponse Response)
  {
  	if (PKCEResponseDelegate.IsBound())
  	{
@@ -1143,7 +1162,7 @@ index 5f4f6d471a13fd35e8ef909584e252a65cf8ae2d..c287c5324d2730cb4a77f17d1cb9e1cc
  	}
  	else
  	{
-@@ -506,7 +533,7 @@ void UImmutablePassport::OnConnectResponse(FImtblJSResponse Response)
+@@ -506,7 +545,7 @@ void UImmutablePassport::OnConnectResponse(FImtblJSResponse Response)
  		{
  			IMTBL_WARN("Connect PKCE attempt failed.");
  			ResetStateFlags(IPS_PKCE);
@@ -1152,17 +1171,39 @@ index 5f4f6d471a13fd35e8ef909584e252a65cf8ae2d..c287c5324d2730cb4a77f17d1cb9e1cc
  		}
  		Analytics->Track(UImmutableAnalytics::EEventName::COMPLETE_LOGIN_PKCE, Response.success);
  		PKCEResponseDelegate.ExecuteIfBound(FImmutablePassportResult{Response.success, Msg, Response});
-@@ -523,8 +550,7 @@ void UImmutablePassport::OnConnectResponse(FImtblJSResponse Response)
- 	}
+@@ -524,7 +563,31 @@ void UImmutablePassport::OnConnectResponse(FImtblJSResponse Response)
  	ResetStateFlags(IPS_COMPLETING_PKCE);
  }
--
--
+ 
++void UImmutablePassport::OnReloginResponse(FImtblJSResponse Response)
++{
++	ResetStateFlags(IPS_CONNECTING);
++
++	if (TOptional<FImtblPassportResponseDelegate> ResponseDelegate = GetResponseDelegate(Response))
++	{
++		FString Error;
++		if (Response.success)
++		{
++			SetStateFlags(IPS_CONNECTED | IPS_PKCE);
++			SavePassportSettings();
++			IMTBL_LOG("Successfully restored cached Passport session")
++		}
++		else
++		{
++			ResetStateFlags(IPS_CONNECTED);
++			Error = GetResponseError(Response, TEXT("Passport cached-session relogin failed."));
++			IMTBL_WARN("Cached Passport session could not be restored")
++		}
+ 
++		Analytics->Track(UImmutableAnalytics::EEventName::COMPLETE_RELOGIN, Response.success);
++		ResponseDelegate->ExecuteIfBound(FImmutablePassportResult{Response.success, Error, Response});
++	}
++}
 +#endif
  
  void UImmutablePassport::OnBridgeCallbackResponse(FImtblJSResponse Response)
  {
-@@ -536,15 +562,13 @@ void UImmutablePassport::OnBridgeCallbackResponse(FImtblJSResponse Response)
+@@ -536,15 +599,13 @@ void UImmutablePassport::OnBridgeCallbackResponse(FImtblJSResponse Response)
  		return;
  	}
  
@@ -1181,7 +1222,7 @@ index 5f4f6d471a13fd35e8ef909584e252a65cf8ae2d..c287c5324d2730cb4a77f17d1cb9e1cc
  	ResponseDelegate->ExecuteIfBound(FImmutablePassportResult{ Response.success, Error, Response });
  }
  
-@@ -566,40 +590,84 @@ bool UImmutablePassport::IsStateFlagsSet(uint8 StateIn) const
+@@ -566,40 +627,84 @@ bool UImmutablePassport::IsStateFlagsSet(uint8 StateIn) const
  void UImmutablePassport::SavePassportSettings()
  {
  	UImmutableSaveGame* SaveGameInstance = Cast<UImmutableSaveGame>(UGameplayStatics::CreateSaveGameObject(UImmutableSaveGame::StaticClass()));
@@ -1279,7 +1320,7 @@ index 5f4f6d471a13fd35e8ef909584e252a65cf8ae2d..c287c5324d2730cb4a77f17d1cb9e1cc
  		}
  	}
  	else if (DeepLink.StartsWith(InitData.redirectUri))
-@@ -608,8 +676,10 @@ void UImmutablePassport::OnDeepLinkActivated(const FString& DeepLink)
+@@ -608,8 +713,10 @@ void UImmutablePassport::OnDeepLinkActivated(const FString& DeepLink)
  	}
  
  	PKCEData = nullptr;
@@ -1290,7 +1331,7 @@ index 5f4f6d471a13fd35e8ef909584e252a65cf8ae2d..c287c5324d2730cb4a77f17d1cb9e1cc
  void UImmutablePassport::CompleteLoginFlow(FString Url)
  {
  	// Required mainly for Android to detect when Chrome Custom tabs is dismissed
-@@ -659,11 +729,11 @@ void UImmutablePassport::CompleteLoginFlow(FString Url)
+@@ -659,11 +766,11 @@ void UImmutablePassport::CompleteLoginFlow(FString Url)
  }
  #endif
  
@@ -1305,7 +1346,7 @@ index 5f4f6d471a13fd35e8ef909584e252a65cf8ae2d..c287c5324d2730cb4a77f17d1cb9e1cc
  // Called from iOS Objective C
  void UImmutablePassport::HandleDeepLink(NSString* sDeepLink) const
  #endif
-@@ -681,6 +751,7 @@ void UImmutablePassport::HandleDeepLink(NSString* sDeepLink) const
+@@ -681,6 +788,7 @@ void UImmutablePassport::HandleDeepLink(NSString* sDeepLink) const
  
  	OnHandleDeepLink.Broadcast(DeepLink);
  }
@@ -1313,7 +1354,7 @@ index 5f4f6d471a13fd35e8ef909584e252a65cf8ae2d..c287c5324d2730cb4a77f17d1cb9e1cc
  
  #if PLATFORM_ANDROID
  void UImmutablePassport::HandleOnLoginPKCEDismissed()
-@@ -747,4 +818,4 @@ void UImmutablePassport::LaunchAndroidUrl(FString Url)
+@@ -747,4 +855,4 @@ void UImmutablePassport::LaunchAndroidUrl(FString Url)
  		CallJniStaticVoidMethod(Env, jimmutableAndroidClass, jlaunchUrl, FJavaWrapper::GameActivityThis, jurl);
  	}
  }
@@ -1411,10 +1452,27 @@ index ecc74032c30f619ee76a9c6f35d7525775891c8c..a88b9810cff1957413457c3cea9c3d9f
 \ No newline at end of file
 +#endif
 diff --git a/Source/Immutable/Private/Immutable/Tests/ImtblMessagesTest.cpp b/Source/Immutable/Private/Immutable/Tests/ImtblMessagesTest.cpp
-index 3918188d6b1075bc2fb562eb59c3f85387c8c701..14090bbb80155613e367d79a53ef943ceba9cd39 100644
+index 3918188d6b1075bc2fb562eb59c3f85387c8c701..7642c9dce71576ce5a6d04a83bbe061f19bf34c7 100644
 --- a/Source/Immutable/Private/Immutable/Tests/ImtblMessagesTest.cpp
 +++ b/Source/Immutable/Private/Immutable/Tests/ImtblMessagesTest.cpp
-@@ -74,4 +74,33 @@ bool FImtblMessagesTest::RunTest(const FString& Parameters)
+@@ -2,11 +2,16 @@
+ 
+ #include "Containers/UnrealString.h"
+ #include "CoreTypes.h"
++#include "Interfaces/IPluginManager.h"
+ #include "Runtime/Launch/Resources/Version.h"
+ 
++#include "Immutable/ImtblJSConnector.h"
++#include "Immutable/ImmutableNames.h"
+ #include "Immutable/ImmutablePassport.h"
+ 
+ #include "Misc/AutomationTest.h"
++#include "Misc/FileHelper.h"
++#include "Misc/Paths.h"
+ #include "Stats/StatsMisc.h"
+ #include "Tests/AutomationCommon.h"
+ #if WITH_EDITOR
+@@ -74,4 +79,146 @@ bool FImtblMessagesTest::RunTest(const FString& Parameters)
  	return true;
  }
  
@@ -1446,6 +1504,119 @@ index 3918188d6b1075bc2fb562eb59c3f85387c8c701..14090bbb80155613e367d79a53ef943c
 +
 +	return true;
 +}
++
++#if PLATFORM_ANDROID | PLATFORM_IOS | PLATFORM_MAC | PLATFORM_WINDOWS
++
++struct FImtblPassportReloginTestAccessor
++{
++	static void Setup(UImmutablePassport& Passport, UImtblJSConnector* Connector)
++	{
++		Passport.Setup(MakeWeakObjectPtr(Connector));
++	}
++
++	static void MarkInitialized(UImmutablePassport& Passport)
++	{
++		Passport.SetStateFlags(UImmutablePassport::IPS_INITIALIZED);
++	}
++
++	static bool IsConnecting(const UImmutablePassport& Passport)
++	{
++		return Passport.IsStateFlagsSet(UImmutablePassport::IPS_CONNECTING);
++	}
++
++	static bool IsConnected(const UImmutablePassport& Passport)
++	{
++		return Passport.IsStateFlagsSet(UImmutablePassport::IPS_CONNECTED);
++	}
++};
++
++#if ((ENGINE_MAJOR_VERSION <= 4) || (ENGINE_MAJOR_VERSION == 5 && ENGINE_MINOR_VERSION <= 4))
++IMPLEMENT_SIMPLE_AUTOMATION_TEST(FImtblIlluviumReloginBridgeContractTest, "Immutable.Illuvium.ReloginBridgeContract", EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::EngineFilter)
++#else
++IMPLEMENT_SIMPLE_AUTOMATION_TEST(FImtblIlluviumReloginBridgeContractTest, "Immutable.Illuvium.ReloginBridgeContract", EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::EngineFilter)
++#endif
++
++bool FImtblIlluviumReloginBridgeContractTest::RunTest(const FString& Parameters)
++{
++	const TSharedPtr<IPlugin> ImmutablePlugin = IPluginManager::Get().FindPlugin(TEXT("Immutable"));
++	TestTrue(TEXT("Immutable plugin is available"), ImmutablePlugin.IsValid());
++	if (!ImmutablePlugin.IsValid())
++	{
++		return false;
++	}
++
++	FString BridgeSource;
++	const FString BridgePath = FPaths::Combine(ImmutablePlugin->GetBaseDir(), TEXT("Web/index.js"));
++	TestTrue(TEXT("Bundled bridge can be read"), FFileHelper::LoadFileToString(BridgeSource, *BridgePath));
++	TestTrue(TEXT("Bundled bridge exposes relogin"), BridgeSource.Contains(TEXT("case\"relogin\"")));
++	TestTrue(TEXT("Bundled relogin uses the cached session"), BridgeSource.Contains(TEXT("useCachedSession")));
++
++	UImtblJSConnector* Connector = NewObject<UImtblJSConnector>();
++	Connector->Init(true);
++
++	FString ExecutedJS;
++	Connector->ExecuteJs.BindLambda([&ExecutedJS](const FString& JS)
++	{
++		ExecutedJS = JS;
++	});
++
++	UImmutablePassport* Passport = NewObject<UImmutablePassport>();
++	FImtblPassportReloginTestAccessor::Setup(*Passport, Connector);
++	bool bUninitializedResponseReceived = false;
++	Passport->Relogin(UImmutablePassport::FImtblPassportResponseDelegate::CreateLambda(
++		[&bUninitializedResponseReceived](const FImmutablePassportResult Result)
++		{
++			bUninitializedResponseReceived = !Result.Success;
++		}));
++
++	TestTrue(TEXT("Uninitialized relogin reports failure"), bUninitializedResponseReceived);
++	TestFalse(TEXT("Uninitialized relogin does not enter connecting state"), FImtblPassportReloginTestAccessor::IsConnecting(*Passport));
++	TestTrue(TEXT("Uninitialized relogin does not call the bridge"), ExecutedJS.IsEmpty());
++
++	FImtblPassportReloginTestAccessor::MarkInitialized(*Passport);
++
++	bool bResponseReceived = false;
++	bool bReloginSucceeded = true;
++	Passport->Relogin(UImmutablePassport::FImtblPassportResponseDelegate::CreateLambda(
++		[&bResponseReceived, &bReloginSucceeded](const FImmutablePassportResult Result)
++		{
++			bResponseReceived = true;
++			bReloginSucceeded = Result.Success;
++		}));
++
++	TestTrue(TEXT("Relogin enters connecting state"), FImtblPassportReloginTestAccessor::IsConnecting(*Passport));
++	TestTrue(TEXT("Relogin emits the bridge action"), ExecutedJS.Contains(TEXT("\\\"fxName\\\":\\\"relogin\\\"")));
++
++	const FString RequestIdPrefix = TEXT("\\\"requestId\\\":\\\"");
++	const int32 RequestIdStart = ExecutedJS.Find(RequestIdPrefix);
++	TestTrue(TEXT("Relogin request includes an id"), RequestIdStart != INDEX_NONE);
++	if (RequestIdStart == INDEX_NONE)
++	{
++		return false;
++	}
++
++	const FString RequestIdTail = ExecutedJS.Mid(RequestIdStart + RequestIdPrefix.Len());
++	const int32 RequestIdEnd = RequestIdTail.Find(TEXT("\\\""));
++	TestTrue(TEXT("Relogin request id is terminated"), RequestIdEnd != INDEX_NONE);
++	if (RequestIdEnd == INDEX_NONE)
++	{
++		return false;
++	}
++
++	const FString RequestId = RequestIdTail.Left(RequestIdEnd);
++	Connector->SendToGame(FString::Printf(
++		TEXT("{\"responseFor\":\"relogin\",\"requestId\":\"%s\",\"success\":false,\"error\":\"Cached session unavailable\"}"),
++		*RequestId));
++
++	TestTrue(TEXT("Relogin forwards the bridge response"), bResponseReceived);
++	TestFalse(TEXT("Failed cached session remains failed"), bReloginSucceeded);
++	TestFalse(TEXT("Failed relogin clears connecting state"), FImtblPassportReloginTestAccessor::IsConnecting(*Passport));
++	TestFalse(TEXT("Failed relogin remains disconnected"), FImtblPassportReloginTestAccessor::IsConnected(*Passport));
++
++	return true;
++}
++
++#endif
 +
  #endif // WITH_DEV_AUTOMATION_TESTS
 diff --git a/Source/Immutable/Public/Immutable/Actions/ImtblBlueprintAsyncAction.h b/Source/Immutable/Public/Immutable/Actions/ImtblBlueprintAsyncAction.h
@@ -1526,8 +1697,27 @@ index 68003e6b4d73952dc684bc906911ae1a8bdd86bd..61648646f2c52b8fd08e6371de8deb21
 -};
 \ No newline at end of file
 +};
+diff --git a/Source/Immutable/Public/Immutable/ImmutableNames.h b/Source/Immutable/Public/Immutable/ImmutableNames.h
+index 74c569a2b5e680aa5e401521f8ae026176fd26bd..894410d346036b39e4fdd07b4524108d8f064cb0 100644
+--- a/Source/Immutable/Public/Immutable/ImmutableNames.h
++++ b/Source/Immutable/Public/Immutable/ImmutableNames.h
+@@ -4,6 +4,7 @@ namespace ImmutablePassportAction
+ {
+ 	const FString INIT = TEXT("init");
+ 	const FString Logout = TEXT("logout");
++	const FString Relogin = TEXT("relogin");
+ 	const FString Connect = TEXT("connect");
+ 	const FString ConnectEvm = TEXT("connectEvm");
+ 	const FString ZkEvmRequestAccounts = TEXT("zkEvmRequestAccounts");
+@@ -31,4 +32,4 @@ namespace ImmutablePassportEnvironmentConstants
+ {
+ 	const FString EnvironmentSandbox = TEXT("sandbox");
+ 	const FString EnvironmentProduction = TEXT("production");
+-}
+\ No newline at end of file
++}
 diff --git a/Source/Immutable/Public/Immutable/ImmutablePassport.h b/Source/Immutable/Public/Immutable/ImmutablePassport.h
-index 8316c575f1d07c7cc765093a3053ca0f4bf07eb6..3501970aa15980c119d69a138444457de659e246 100644
+index 8316c575f1d07c7cc765093a3053ca0f4bf07eb6..31631111cb976dd6aa1f6d327d981aa4ad417beb 100644
 --- a/Source/Immutable/Public/Immutable/ImmutablePassport.h
 +++ b/Source/Immutable/Public/Immutable/ImmutablePassport.h
 @@ -12,6 +12,9 @@
@@ -1540,7 +1730,17 @@ index 8316c575f1d07c7cc765093a3053ca0f4bf07eb6..3501970aa15980c119d69a138444457d
  /**
   * Converts a UStruct instance to a JSON string representation.
   *
-@@ -71,6 +74,7 @@ public:
+@@ -60,6 +63,9 @@ class IMMUTABLE_API UImmutablePassport : public UObject
+ {
+ 	GENERATED_BODY()
+ 	friend class UImmutableSubsystem;
++#if WITH_DEV_AUTOMATION_TESTS
++	friend struct FImtblPassportReloginTestAccessor;
++#endif
+ 
+ public:
+ 	/**
+@@ -71,6 +77,7 @@ public:
  	 * Delegate used for JavaScript callbacks.
  	 */
  	DECLARE_DELEGATE_OneParam(FImtblPassportResponseDelegate, FImmutablePassportResult);
@@ -1548,7 +1748,21 @@ index 8316c575f1d07c7cc765093a3053ca0f4bf07eb6..3501970aa15980c119d69a138444457d
  
  #if PLATFORM_ANDROID
  	/**
-@@ -214,6 +218,11 @@ public:
+@@ -104,6 +111,13 @@ public:
+ 	 * @param DirectLoginOptions	Direct login options for authentication (email, google, apple, facebook).
+ 	 */
+ 	void Connect(const FImtblPassportResponseDelegate& ResponseDelegate, const FImmutableDirectLoginOptions& DirectLoginOptions);
++
++	/**
++	 * Restores a Passport session from cached credentials without opening an interactive login.
++	 *
++	 * @param ResponseDelegate Callback delegate.
++	 */
++	void Relogin(const FImtblPassportResponseDelegate& ResponseDelegate);
+ #endif
+ 
+ 	/**
+@@ -214,6 +228,11 @@ public:
  	 */
  	void HasStoredCredentials(const FImtblPassportResponseDelegate& ResponseDelegate);
  
@@ -1560,7 +1774,21 @@ index 8316c575f1d07c7cc765093a3053ca0f4bf07eb6..3501970aa15980c119d69a138444457d
  	/**
  	 * Retrieves the "result" as string field from Response.JsonObject.
  	 *
-@@ -444,6 +453,9 @@ private:
+@@ -360,6 +379,13 @@ protected:
+ 	 */
+ 	void OnConnectResponse(FImtblJSResponse Response);
+ 
++	/*
++	 * Callback from cached-session relogin.
++	 *
++	 * @param Response The JavaScript response object containing the result of the callback.
++	 */
++	void OnReloginResponse(FImtblJSResponse Response);
++
+ 	/*
+ 	 * Completes the PKCE login flow using the provided URL.
+ 	 * 
+@@ -444,6 +470,9 @@ private:
  	 * Loads the passport settings from save game object.
  	 */
  	void LoadPassportSettings();
@@ -1570,7 +1798,7 @@ index 8316c575f1d07c7cc765093a3053ca0f4bf07eb6..3501970aa15980c119d69a138444457d
  
  private:
  	/**
-@@ -462,10 +474,11 @@ private:
+@@ -462,10 +491,11 @@ private:
  
  	/** Passport state flags. */
  	uint8 StateFlags = IPS_NONE;
@@ -1583,7 +1811,7 @@ index 8316c575f1d07c7cc765093a3053ca0f4bf07eb6..3501970aa15980c119d69a138444457d
  
  	/**
  	 * PKCE data used for PKCE operations e.g. login and logout flows.
-@@ -474,4 +487,4 @@ private:
+@@ -474,4 +504,4 @@ private:
  	 */
  	UPROPERTY(Transient)
  	TObjectPtr<UImmutablePKCEData> PKCEData;

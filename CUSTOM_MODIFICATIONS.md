@@ -14,9 +14,9 @@ current baseline and their patch was not applied.
 | Canonical official URL | `https://github.com/immutable/unreal-immutable-sdk.git` |
 | Pinned fetched `upstream/main` | `4973cee21bfaa53dadc9e4519d53a3ae2203bb29` |
 | Matching official tag | `v1.11.5` |
-| Source implementation commit | `5b5b28d2701e7fc9446dabeda672284b8d9b302f` |
-| Plastic compile-fix source | `/main/UpdateImmutable_v1.11.5` at `cs:41201` |
-| Plastic extraction state | Plugin scope clean; selected changeset and branch head both `cs:41201` |
+| Source implementation commit | `7eb5b5b32704267692b0d668d2ef2fddde217f57` |
+| Plastic integration source | `/main/UpdateImmutable_v1.11.5` at `cs:41211` |
+| Plastic extraction state | Plugin scope clean; selected changeset and branch head both `cs:41211` |
 | Plugin installation state | `Immutable.uplugin` has `"Installed": false` |
 
 The authoritative marker at both the pinned base and the implementation commit is
@@ -26,7 +26,7 @@ The authoritative marker at both the pinned base and the implementation commit i
 #define ENGINE_SDK_VERSION TEXT("1.11.5")
 ```
 
-The implementation is a 30-file net delta with 667 insertions and 160 deletions. No SDK 1.9.0
+The implementation is a 31-file net delta with 839 insertions and 159 deletions. No SDK 1.9.0
 file was copied over a 1.11.5 file, no upstream-removed file was restored, and the old 1.9.0 patch
 is absent.
 
@@ -39,6 +39,9 @@ files and only these two source differences. Their pinned Plastic SHA-256 values
 - `ImmutablePassport.cpp`: `ac19468c16ddca5bcdb3812aad8e539093aed0abd29b5ea17c7c31138e1f36fb`
 
 The files at the source implementation commit match those Plastic revisions byte-for-byte.
+
+Plastic `cs:41211` then restored silent cached-session relogin and added its focused bridge-contract
+test. The four resulting source/test files match the clean Plastic endpoint byte-for-byte.
 
 ## Customization review
 
@@ -66,12 +69,13 @@ The files at the source implementation commit match those Plastic revisions byte
 | Cross-platform Passport compilation | Ported from Plastic `cs:41201` | Broad desktop/mobile guards were narrowed so common Passport response, state, save/load, and game-instance definitions compile on Linux. Deep-link delegates, PKCE completion, and platform-specific overloads remain restricted to Android, iOS, Mac, and Windows. `Source/Immutable/Private/Immutable/ImmutablePassport.cpp`. |
 | Browser console severity mapping | Ported | Browser Fatal/Error map to Unreal Error, Warning to Warning, Debug/Verbose to Verbose, and remaining levels to Log. Browser Fatal never invokes Unreal Fatal; source and line are retained. `Source/Immutable/Private/Immutable/Browser/ImmutableBaseBrowserWidget.cpp`. |
 | Custom URL launch delegate | Adapted | `FImtblPassportLaunchURLDelegate` and `SetCustomLaunchURLDelegate` are public Passport APIs. Windows PKCE auth and hard logout use the delegate when bound and otherwise use `FPlatformProcess::LaunchURL`; Android, iOS, and Mac retain their native paths. `Source/Immutable/Public/Immutable/ImmutablePassport.h`; `Source/Immutable/Private/Immutable/ImmutablePassport.cpp`. |
+| Silent cached-session relogin | Ported as a compatibility wrapper | Native `UImmutablePassport::Relogin` invokes the existing `relogin` bridge action, restores `IPS_CONNECTED | IPS_PKCE`, persists state, tracks `COMPLETE_RELOGIN`, and returns failure without launching a browser. The caller owns interactive fallback. `Web/index.js` is unchanged. `Source/Immutable/Public/Immutable/ImmutableNames.h`; `Source/Immutable/Public/Immutable/ImmutablePassport.h`; `Source/Immutable/Private/Immutable/ImmutablePassport.cpp`. |
 | Legacy desktop device flow | Obsolete | The old device-flow APIs are absent from SDK 1.11.5. They were not reintroduced; current PKCE desktop flows receive the launch override. |
 | Immutable/ImmutableEditor module compatibility | Ported | `IWYUSupport.Full` and unity-build settings are retained with minimal Build.cs edits. `Source/Immutable/Immutable.Build.cs`; `Source/ImmutableEditor/ImmutableEditor.Build.cs`. |
 | Forward declarations and implementation includes | Ported | Subsystem, analytics, game-instance, Slate browser, world, and CEF dependencies are declared/included at their use sites. Runtime dependency `Web/index.js` and the upstream module layout remain unchanged. |
 | Plugin marked not installed | Ported for this fork | `Immutable.uplugin` now has `"Installed": false`. |
 | Empty analytics JSON payload | Already upstream | SDK 1.11.5 already sends `{}`; `ImmutableAnalytics.cpp` is unchanged. |
-| Automation flag spelling compatibility | Already upstream / preserved | The existing UE-version conditional for `EAutomationTestFlags_ApplicationContextMask` is retained. A focused response-handling test was added below it. `Source/Immutable/Private/Immutable/Tests/ImtblMessagesTest.cpp`. |
+| Automation flag spelling compatibility | Already upstream / preserved | The existing UE-version conditional for `EAutomationTestFlags_ApplicationContextMask` is retained. Focused response-handling and relogin bridge-contract tests live below it. `Source/Immutable/Private/Immutable/Tests/ImtblMessagesTest.cpp`. |
 | Log category maximum verbosity | Already upstream | `LogImmutable` already declares maximum verbosity `All`; no duplicate change was made. `Source/Immutable/Public/Immutable/Misc/ImtblLogging.h`. |
 | Call-before-bridge warning | Ported | Re-enabled the existing warning before queuing work for bridge readiness. `Source/Immutable/Private/Immutable/ImtblJSConnector.cpp`. |
 | Initial browser throbber | Dropped | The 1.9.0 fork enabled it. SDK 1.11.5's browser is a hidden game-bridge widget and upstream defaults it off, so that UI-only change was not carried. |
@@ -83,6 +87,8 @@ The files at the source implementation commit match those Plastic revisions byte
 - The port starts at official commit `4973cee...`, not the historical unpublished 1.9.0 snapshot.
 - The 1.11.5 `UImmutableBaseBrowserWidget` / `UImmutableJSConnectorBrowserWidget` architecture is extended instead of restoring `ImtblBrowserWidget`.
 - Removed IMX and legacy device-flow APIs are not recreated; current direct login, embedded login, PKCE, and zkEVM paths are covered.
+- The removed C++ relogin option is restored only as a thin native wrapper over the retained SDK 1.11.5 `relogin` bridge action; no legacy
+  device flow or new JavaScript is reintroduced.
 - The historical GC-retained world-context customization was explicitly reverted; current actions use upstream's raw `WorldContextObject` member while retaining null-safe subsystem lookup.
 - The Chromium bridge queue is explicitly bounded at 256 callbacks while retaining the historical 5-second polling ceiling.
 - SDK 1.11.5 behavior already covers save existence checks, state initialization, analytics `{}`, automation flag spelling, and log-category maximum verbosity.
@@ -91,7 +97,7 @@ The files at the source implementation commit match those Plastic revisions byte
 ## Build and test record
 
 Validation used Unreal Engine 5.8.2 (`5.8.2-56702186`) and disposable output outside the Git repository.
-The current source endpoint was validated on 2026-09-03 after copying the two pinned Plastic files
+The compile-fix transfer was validated on 2026-09-03 after copying the two pinned Plastic files
 into the existing disposable host plugin.
 
 ### Standalone BuildPlugin
@@ -154,14 +160,18 @@ The full suite run during the initial port discovered two tests:
 The focused `Immutable.Illuvium.ResponseHandling` invocation was rerun after the Plastic compile-fix
 transfer. Unreal discovered one matching test, reported `Result={Success}`, and exited with code `0`.
 
+The clean IlluviumGame Plastic endpoint at `cs:41211` was built as Win64 Development Editor, Win64
+Shipping Game, and Linux Development Server. Its focused `Immutable.Illuvium` run discovered
+`Immutable.Illuvium.ReloginBridgeContract` and `Immutable.Illuvium.ResponseHandling`; both passed and
+the automation process exited with code `0`.
+
 ## Pending manual validation
 
-Live Passport credentials, Windows PKCE and hard-logout delegate behavior, native Android/iOS/Mac
+Live Passport credentials, silent relogin after restart, cached-session fallback, Windows PKCE and hard-logout delegate behavior, native Android/iOS/Mac
 launch paths, simultaneous multi-user PIE persistence, headless multiplayer PIE, browser console
 mapping, CEF profile persistence under the Illuvium engine, stock-engine in-memory fallback, packaged
 game login, and in-game behavior remain pending runtime validation. Plastic branch
-`/main/UpdateImmutable_v1.11.5` at `cs:41201` supplied the two compile fixes and was inspected
-read-only; this Git transfer did not modify Plastic.
+`/main/UpdateImmutable_v1.11.5` at `cs:41211` supplied the synchronized source and tests.
 
 ## Patch artifact
 
@@ -169,12 +179,12 @@ read-only; this Git transfer did not modify Plastic.
 | --- | --- |
 | File | `illuvium-1.11.5-snapshot-customizations.patch` |
 | Base commit | `4973cee21bfaa53dadc9e4519d53a3ae2203bb29` |
-| Endpoint commit | `5b5b28d2701e7fc9446dabeda672284b8d9b302f` |
-| Size | 66,793 bytes |
-| SHA-256 | `8fabcd3ff61d3f334ba3374bad82fc3d8cfcefa37ead8c5e4c727a62c76b7b5e` |
-| Source files | 30 |
-| Insertions | 667 |
-| Deletions | 160 |
+| Endpoint commit | `7eb5b5b32704267692b0d668d2ef2fddde217f57` |
+| Size | 75,623 bytes |
+| SHA-256 | `9ad3bc2aec22fc0799eef98de2490eefbfb3447463d7f4247f79219cd737e9a2` |
+| Source files | 31 |
+| Insertions | 839 |
+| Deletions | 159 |
 
 The patch excludes `CUSTOM_MODIFICATIONS.md` and the patch file itself.
 
@@ -184,7 +194,7 @@ The patch excludes `CUSTOM_MODIFICATIONS.md` and the patch file itself.
 git diff --binary --full-index --find-renames `
   --output=illuvium-1.11.5-snapshot-customizations.patch `
   4973cee21bfaa53dadc9e4519d53a3ae2203bb29 `
-  5b5b28d2701e7fc9446dabeda672284b8d9b302f -- . `
+  7eb5b5b32704267692b0d668d2ef2fddde217f57 -- . `
   ':(exclude)CUSTOM_MODIFICATIONS.md' `
   ':(exclude)illuvium-1.11.5-snapshot-customizations.patch'
 ```
@@ -204,7 +214,7 @@ git -C $ApplyTree apply --binary $PatchPath
 ### Reproduction verification
 
 The patch was checked and applied in an external disposable worktree at the exact base. After staging
-the result, `git write-tree` returned `f824429aa176e1e8e998f9d4cd87972e80d21dff`, exactly matching
+the result, `git write-tree` returned `e0389a693f2b8a186b0d24dedd24737916aa30fd`, exactly matching
 the source endpoint after excluding `CUSTOM_MODIFICATIONS.md` and the patch artifact. This compares
 every included tracked path, file mode, and blob hash (122 tracked files) and confirms no missing or
 extra source files. The two audit artifacts are excluded from the patch payload by pathspec.
