@@ -154,6 +154,18 @@ void UImmutablePassport::Connect(const FImtblPassportResponseDelegate& ResponseD
 
 	CallJS(ImmutablePassportAction::GetPKCEAuthUrl, PKCERequestJson, PKCEResponseDelegate, FImtblJSResponseDelegate::CreateUObject(this, &UImmutablePassport::OnGetAuthUrlResponse));
 }
+
+void UImmutablePassport::Relogin(const FImtblPassportResponseDelegate& ResponseDelegate)
+{
+	if (!CheckIsInitialized(ImmutablePassportAction::Relogin, ResponseDelegate))
+	{
+		return;
+	}
+
+	SetStateFlags(IPS_CONNECTING);
+	CallJS(ImmutablePassportAction::Relogin, TEXT(""), ResponseDelegate,
+		FImtblJSResponseDelegate::CreateUObject(this, &ThisClass::OnReloginResponse), false);
+}
 #endif
 
 void UImmutablePassport::Logout(bool DoHardLogout, const FImtblPassportResponseDelegate& ResponseDelegate)
@@ -549,6 +561,31 @@ void UImmutablePassport::OnConnectResponse(FImtblJSResponse Response)
 		IMTBL_ERR("Unable to return a response for Connect PKCE.");
 	}
 	ResetStateFlags(IPS_COMPLETING_PKCE);
+}
+
+void UImmutablePassport::OnReloginResponse(FImtblJSResponse Response)
+{
+	ResetStateFlags(IPS_CONNECTING);
+
+	if (TOptional<FImtblPassportResponseDelegate> ResponseDelegate = GetResponseDelegate(Response))
+	{
+		FString Error;
+		if (Response.success)
+		{
+			SetStateFlags(IPS_CONNECTED | IPS_PKCE);
+			SavePassportSettings();
+			IMTBL_LOG("Successfully restored cached Passport session")
+		}
+		else
+		{
+			ResetStateFlags(IPS_CONNECTED);
+			Error = GetResponseError(Response, TEXT("Passport cached-session relogin failed."));
+			IMTBL_WARN("Cached Passport session could not be restored")
+		}
+
+		Analytics->Track(UImmutableAnalytics::EEventName::COMPLETE_RELOGIN, Response.success);
+		ResponseDelegate->ExecuteIfBound(FImmutablePassportResult{Response.success, Error, Response});
+	}
 }
 #endif
 

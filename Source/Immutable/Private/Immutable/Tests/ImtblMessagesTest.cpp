@@ -2,11 +2,16 @@
 
 #include "Containers/UnrealString.h"
 #include "CoreTypes.h"
+#include "Interfaces/IPluginManager.h"
 #include "Runtime/Launch/Resources/Version.h"
 
+#include "Immutable/ImtblJSConnector.h"
+#include "Immutable/ImmutableNames.h"
 #include "Immutable/ImmutablePassport.h"
 
 #include "Misc/AutomationTest.h"
+#include "Misc/FileHelper.h"
+#include "Misc/Paths.h"
 #include "Stats/StatsMisc.h"
 #include "Tests/AutomationCommon.h"
 #if WITH_EDITOR
@@ -102,5 +107,118 @@ bool FImtblIlluviumResponseHandlingTest::RunTest(const FString& Parameters)
 
 	return true;
 }
+
+#if PLATFORM_ANDROID | PLATFORM_IOS | PLATFORM_MAC | PLATFORM_WINDOWS
+
+struct FImtblPassportReloginTestAccessor
+{
+	static void Setup(UImmutablePassport& Passport, UImtblJSConnector* Connector)
+	{
+		Passport.Setup(MakeWeakObjectPtr(Connector));
+	}
+
+	static void MarkInitialized(UImmutablePassport& Passport)
+	{
+		Passport.SetStateFlags(UImmutablePassport::IPS_INITIALIZED);
+	}
+
+	static bool IsConnecting(const UImmutablePassport& Passport)
+	{
+		return Passport.IsStateFlagsSet(UImmutablePassport::IPS_CONNECTING);
+	}
+
+	static bool IsConnected(const UImmutablePassport& Passport)
+	{
+		return Passport.IsStateFlagsSet(UImmutablePassport::IPS_CONNECTED);
+	}
+};
+
+#if ((ENGINE_MAJOR_VERSION <= 4) || (ENGINE_MAJOR_VERSION == 5 && ENGINE_MINOR_VERSION <= 4))
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FImtblIlluviumReloginBridgeContractTest, "Immutable.Illuvium.ReloginBridgeContract", EAutomationTestFlags::ApplicationContextMask | EAutomationTestFlags::EngineFilter)
+#else
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FImtblIlluviumReloginBridgeContractTest, "Immutable.Illuvium.ReloginBridgeContract", EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::EngineFilter)
+#endif
+
+bool FImtblIlluviumReloginBridgeContractTest::RunTest(const FString& Parameters)
+{
+	const TSharedPtr<IPlugin> ImmutablePlugin = IPluginManager::Get().FindPlugin(TEXT("Immutable"));
+	TestTrue(TEXT("Immutable plugin is available"), ImmutablePlugin.IsValid());
+	if (!ImmutablePlugin.IsValid())
+	{
+		return false;
+	}
+
+	FString BridgeSource;
+	const FString BridgePath = FPaths::Combine(ImmutablePlugin->GetBaseDir(), TEXT("Web/index.js"));
+	TestTrue(TEXT("Bundled bridge can be read"), FFileHelper::LoadFileToString(BridgeSource, *BridgePath));
+	TestTrue(TEXT("Bundled bridge exposes relogin"), BridgeSource.Contains(TEXT("case\"relogin\"")));
+	TestTrue(TEXT("Bundled relogin uses the cached session"), BridgeSource.Contains(TEXT("useCachedSession")));
+
+	UImtblJSConnector* Connector = NewObject<UImtblJSConnector>();
+	Connector->Init(true);
+
+	FString ExecutedJS;
+	Connector->ExecuteJs.BindLambda([&ExecutedJS](const FString& JS)
+	{
+		ExecutedJS = JS;
+	});
+
+	UImmutablePassport* Passport = NewObject<UImmutablePassport>();
+	FImtblPassportReloginTestAccessor::Setup(*Passport, Connector);
+	bool bUninitializedResponseReceived = false;
+	Passport->Relogin(UImmutablePassport::FImtblPassportResponseDelegate::CreateLambda(
+		[&bUninitializedResponseReceived](const FImmutablePassportResult Result)
+		{
+			bUninitializedResponseReceived = !Result.Success;
+		}));
+
+	TestTrue(TEXT("Uninitialized relogin reports failure"), bUninitializedResponseReceived);
+	TestFalse(TEXT("Uninitialized relogin does not enter connecting state"), FImtblPassportReloginTestAccessor::IsConnecting(*Passport));
+	TestTrue(TEXT("Uninitialized relogin does not call the bridge"), ExecutedJS.IsEmpty());
+
+	FImtblPassportReloginTestAccessor::MarkInitialized(*Passport);
+
+	bool bResponseReceived = false;
+	bool bReloginSucceeded = true;
+	Passport->Relogin(UImmutablePassport::FImtblPassportResponseDelegate::CreateLambda(
+		[&bResponseReceived, &bReloginSucceeded](const FImmutablePassportResult Result)
+		{
+			bResponseReceived = true;
+			bReloginSucceeded = Result.Success;
+		}));
+
+	TestTrue(TEXT("Relogin enters connecting state"), FImtblPassportReloginTestAccessor::IsConnecting(*Passport));
+	TestTrue(TEXT("Relogin emits the bridge action"), ExecutedJS.Contains(TEXT("\\\"fxName\\\":\\\"relogin\\\"")));
+
+	const FString RequestIdPrefix = TEXT("\\\"requestId\\\":\\\"");
+	const int32 RequestIdStart = ExecutedJS.Find(RequestIdPrefix);
+	TestTrue(TEXT("Relogin request includes an id"), RequestIdStart != INDEX_NONE);
+	if (RequestIdStart == INDEX_NONE)
+	{
+		return false;
+	}
+
+	const FString RequestIdTail = ExecutedJS.Mid(RequestIdStart + RequestIdPrefix.Len());
+	const int32 RequestIdEnd = RequestIdTail.Find(TEXT("\\\""));
+	TestTrue(TEXT("Relogin request id is terminated"), RequestIdEnd != INDEX_NONE);
+	if (RequestIdEnd == INDEX_NONE)
+	{
+		return false;
+	}
+
+	const FString RequestId = RequestIdTail.Left(RequestIdEnd);
+	Connector->SendToGame(FString::Printf(
+		TEXT("{\"responseFor\":\"relogin\",\"requestId\":\"%s\",\"success\":false,\"error\":\"Cached session unavailable\"}"),
+		*RequestId));
+
+	TestTrue(TEXT("Relogin forwards the bridge response"), bResponseReceived);
+	TestFalse(TEXT("Failed cached session remains failed"), bReloginSucceeded);
+	TestFalse(TEXT("Failed relogin clears connecting state"), FImtblPassportReloginTestAccessor::IsConnecting(*Passport));
+	TestFalse(TEXT("Failed relogin remains disconnected"), FImtblPassportReloginTestAccessor::IsConnected(*Passport));
+
+	return true;
+}
+
+#endif
 
 #endif // WITH_DEV_AUTOMATION_TESTS

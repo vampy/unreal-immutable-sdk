@@ -63,6 +63,9 @@ class IMMUTABLE_API UImmutablePassport : public UObject
 {
 	GENERATED_BODY()
 	friend class UImmutableSubsystem;
+#if WITH_DEV_AUTOMATION_TESTS
+	friend struct FImtblPassportReloginTestAccessor;
+#endif
 
 public:
 	/**
@@ -108,6 +111,13 @@ public:
 	 * @param DirectLoginOptions	Direct login options for authentication (email, google, apple, facebook).
 	 */
 	void Connect(const FImtblPassportResponseDelegate& ResponseDelegate, const FImmutableDirectLoginOptions& DirectLoginOptions);
+
+	/**
+	 * Restores a Passport session from cached credentials without opening an interactive login.
+	 *
+	 * @param ResponseDelegate Callback delegate.
+	 */
+	void Relogin(const FImtblPassportResponseDelegate& ResponseDelegate);
 #endif
 
 	/**
@@ -368,6 +378,13 @@ protected:
 	 * @param Response The JavaScript response object containing the result of the callback.
 	 */
 	void OnConnectResponse(FImtblJSResponse Response);
+
+	/*
+	 * Callback from cached-session relogin.
+	 *
+	 * @param Response The JavaScript response object containing the result of the callback.
+	 */
+	void OnReloginResponse(FImtblJSResponse Response);
 
 	/*
 	 * Completes the PKCE login flow using the provided URL.

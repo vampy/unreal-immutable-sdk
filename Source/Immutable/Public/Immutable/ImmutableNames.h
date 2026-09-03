@@ -4,6 +4,7 @@ namespace ImmutablePassportAction
 {
 	const FString INIT = TEXT("init");
 	const FString Logout = TEXT("logout");
+	const FString Relogin = TEXT("relogin");
 	const FString Connect = TEXT("connect");
 	const FString ConnectEvm = TEXT("connectEvm");
 	const FString ZkEvmRequestAccounts = TEXT("zkEvmRequestAccounts");
