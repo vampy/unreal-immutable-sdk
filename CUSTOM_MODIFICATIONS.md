@@ -14,19 +14,20 @@ current baseline and their patch was not applied.
 | Canonical official URL | `https://github.com/immutable/unreal-immutable-sdk.git` |
 | Pinned fetched `upstream/main` | `4973cee21bfaa53dadc9e4519d53a3ae2203bb29` |
 | Matching official tag | `v1.11.5` |
-| Source implementation commit | `7eb5b5b32704267692b0d668d2ef2fddde217f57` |
-| Plastic integration source | `/main/UpdateImmutable_v1.11.5` at `cs:41211` |
-| Plastic extraction state | Plugin scope clean; selected changeset and branch head both `cs:41211` |
+| Original integration implementation commit | `7eb5b5b32704267692b0d668d2ef2fddde217f57` |
+| Original Plastic integration source | `/main/UpdateImmutable_v1.11.5` at `cs:41211` |
+| Original Plastic extraction state | Plugin scope clean; selected changeset and branch head both `cs:41211` |
 | Plugin installation state | `Immutable.uplugin` has `"Installed": false` |
 
-The authoritative marker at both the pinned base and the implementation commit is
+The authoritative marker at the pinned base, original implementation commit, and final local source tree is
 `Source/Immutable/Public/Immutable/ImmutableDataTypes.h`:
 
 ```cpp
 #define ENGINE_SDK_VERSION TEXT("1.11.5")
 ```
 
-The implementation is a 31-file net delta with 839 insertions and 159 deletions. No SDK 1.9.0
+The original integration was a 31-file net delta with 839 insertions and 159 deletions.
+The final local source is a 32-file net delta with 865 insertions and 160 deletions. No SDK 1.9.0
 file was copied over a 1.11.5 file, no upstream-removed file was restored, and the old 1.9.0 patch
 is absent.
 
@@ -38,10 +39,81 @@ files and only these two source differences. Their pinned Plastic SHA-256 values
 - `ImmutableJSConnectorBrowserWidget.cpp`: `58477e214059cc41619af90ee471da0ea11d2910bf4ce05a9478f5f9a8cf8cdc`
 - `ImmutablePassport.cpp`: `ac19468c16ddca5bcdb3812aad8e539093aed0abd29b5ea17c7c31138e1f36fb`
 
-The files at the source implementation commit match those Plastic revisions byte-for-byte.
+Those two files at compile-fix commit `5b5b28d2701e7fc9446dabeda672284b8d9b302f` matched those Plastic revisions
+byte-for-byte. The later relogin change modifies `ImmutablePassport.cpp` again.
 
 Plastic `cs:41211` then restored silent cached-session relogin and added its focused bridge-contract
 test. The four resulting source/test files match the clean Plastic endpoint byte-for-byte.
+
+## Subsequent local synchronization: 2026-09-08
+
+The original `cs:41211` snapshot above remains historical provenance. This synchronization inspected
+Plastic `/main@IlluviumGame@Illuvium@cloud`, loaded changeset and branch head `cs:41259`.
+The callback file's last checked-in revision was `cs:41201` on `/main/UpdateImmutable_v1.11.5`;
+`cm cat` at `cs:41259` matches Git HEAD's callback source after line-ending normalization.
+The conhost implementation and subsequent explanatory comments are local changes over that baseline,
+not a new Plastic changeset. No source behavior was changed during this synchronization.
+
+| Item | Current local endpoint |
+| --- | --- |
+| Git branch and unchanged HEAD | `illuvium`, `1aa6864ad3295c701399d2bd66f678b8ad17c7bb` |
+| Final source tree (not a commit) | `8762e9ca32fa2da840ea826fab9697ff821d76ea` |
+| Plastic source | `/main`, `cs:41259` plus local `ImmutablePKCEWindows.cpp` changes |
+| Callback file SHA-256 (copied bytes, LF) | `432a4b078a62b4643d2258c74f6ed5a350ba62e8becfc6d6a389b5538a683122` |
+| Audit exclusions from source tree | `CUSTOM_MODIFICATIONS.md`, `illuvium-1.11.5-snapshot-customizations.patch` |
+
+The tree object identifies every final tracked source path, mode, and blob without referencing a commit
+that contains its own hash. It is a local object, not a published ref; recreate it from the synchronized
+checkout using the instructions below if it has been pruned. No commit, check-in, or push was performed.
+The local `origin/illuvium` tracking ref also names `1aa6864ad3295c701399d2bd66f678b8ad17c7bb`; a live remote
+query failed with SSH `Permission denied (publickey)`, so the current remote tip was not verified.
+
+A full filesystem comparison found only the callback source differed among shared plugin files before
+synchronization. No Git-only SDK source required merging. Ten unchanged upstream `.github/` CI/template
+files remain Git-only repository hosting metadata; they are retained in Git and in source-tree verification,
+but excluded from Plastic plugin parity. `.git/`, `.plastic/`, and generated `Binaries/`, `Intermediate/`,
+`Saved/`, and `DerivedDataCache/` output are excluded from filesystem comparison. All 114 distributable
+source and audit files match byte-for-byte between the two locations after synchronization.
+
+### Headless Windows callback customization
+
+`Source/Immutable/Private/Immutable/Windows/ImmutablePKCEWindows.cpp` now registers:
+
+```text
+conhost.exe --headless powershell.exe -ExecutionPolicy Bypass -NoProfile -File "<script path>" "%1"
+```
+
+The C++ `FString::Printf` format uses `%%1` to emit Windows' `%1` placeholder. The script path and URI
+are quoted; the URI remains data after `-File`. The existing generated PowerShell script, registry transport,
+registry watcher, and Passport completion behavior are preserved. Direct PowerShell with `-WindowStyle Hidden`
+still flashed because console creation can precede option handling. Comments preserve the callback flow,
+quoting rationale, exit-code limitations, compatibility limits, and validation context. Callback delivery and
+Passport results establish success; conhost's child exit-code propagation is not reliable.
+
+Compatibility is deliberately limited: conhost is built into Windows 7 and later, but availability does not
+prove support for this command. Windows 10 1809 is the documented ConPTY API baseline, not a guaranteed
+minimum for this direct launcher. Microsoft treats direct conhost invocation as an unsupported interface.
+Older conhost versions had argument-quoting issues; the oldest reliable Windows build for this exact command
+remains unverified. There is no version gate or fallback. The integration document's Windows compatibility
+section retains the primary-source references.
+
+### Prior callback validation (retained, not rerun by this synchronization)
+
+The IlluviumGame `Docs/Immutable/SDK1.11.5Integration.md` record for 2026-09-08 states:
+
+- Development Editor and Win64 Shipping Game builds passed after the conhost implementation.
+- Compiled Editor checks exercised real protocol registration and generated PowerShell callback delivery
+  with synthetic login/logout URLs. Normal and spaced script paths passed all four checks, with zero visible
+  callback-host windows sampled at approximately 5 ms intervals.
+- The prior direct PowerShell launcher delivered the callback but failed the no-visible-window check.
+- The user subsequently confirmed login and logout worked without flashing. No exact package/build ID was recorded.
+- Later comment/documentation additions did not change executable code. The full Immutable suite was not
+  rerun for the launcher change; older platform and suite results below remain historical.
+
+These checks do not prove the absence of flashes shorter than the sampling interval or older-Windows
+compatibility. Packaged-game testing belongs to the user; no packaged game was launched or tested here.
+This synchronization reran source comparison, patch regeneration/application, tree/mode verification,
+artifact hashes, and parity only; it did not rerun builds, protocol registration, or authentication.
 
 ## Customization review
 
@@ -70,6 +142,7 @@ test. The four resulting source/test files match the clean Plastic endpoint byte
 | Browser console severity mapping | Ported | Browser Fatal/Error map to Unreal Error, Warning to Warning, Debug/Verbose to Verbose, and remaining levels to Log. Browser Fatal never invokes Unreal Fatal; source and line are retained. `Source/Immutable/Private/Immutable/Browser/ImmutableBaseBrowserWidget.cpp`. |
 | Custom URL launch delegate | Adapted | `FImtblPassportLaunchURLDelegate` and `SetCustomLaunchURLDelegate` are public Passport APIs. Windows PKCE auth and hard logout use the delegate when bound and otherwise use `FPlatformProcess::LaunchURL`; Android, iOS, and Mac retain their native paths. `Source/Immutable/Public/Immutable/ImmutablePassport.h`; `Source/Immutable/Private/Immutable/ImmutablePassport.cpp`. |
 | Silent cached-session relogin | Ported as a compatibility wrapper | Native `UImmutablePassport::Relogin` invokes the existing `relogin` bridge action, restores `IPS_CONNECTED | IPS_PKCE`, persists state, tracks `COMPLETE_RELOGIN`, and returns failure without launching a browser. The caller owns interactive fallback. `Web/index.js` is unchanged. `Source/Immutable/Public/Immutable/ImmutableNames.h`; `Source/Immutable/Public/Immutable/ImmutablePassport.h`; `Source/Immutable/Private/Immutable/ImmutablePassport.cpp`. |
+| Headless Windows callback launcher | Subsequent local customization over Plastic `cs:41259` | Shared login/logout protocol registration uses headless conhost, quoted script/URI arguments, and unchanged registry transport. See the implementation and validation limits above. `Source/Immutable/Private/Immutable/Windows/ImmutablePKCEWindows.cpp`. |
 | Legacy desktop device flow | Obsolete | The old device-flow APIs are absent from SDK 1.11.5. They were not reintroduced; current PKCE desktop flows receive the launch override. |
 | Immutable/ImmutableEditor module compatibility | Ported | `IWYUSupport.Full` and unity-build settings are retained with minimal Build.cs edits. `Source/Immutable/Immutable.Build.cs`; `Source/ImmutableEditor/ImmutableEditor.Build.cs`. |
 | Forward declarations and implementation includes | Ported | Subsystem, analytics, game-instance, Slate browser, world, and CEF dependencies are declared/included at their use sites. Runtime dependency `Web/index.js` and the upstream module layout remain unchanged. |
@@ -167,11 +240,12 @@ the automation process exited with code `0`.
 
 ## Pending manual validation
 
-Live Passport credentials, silent relogin after restart, cached-session fallback, Windows PKCE and hard-logout delegate behavior, native Android/iOS/Mac
-launch paths, simultaneous multi-user PIE persistence, headless multiplayer PIE, browser console
-mapping, CEF profile persistence under the Illuvium engine, stock-engine in-memory fallback, packaged
-game login, and in-game behavior remain pending runtime validation. Plastic branch
-`/main/UpdateImmutable_v1.11.5` at `cs:41211` supplied the synchronized source and tests.
+Local Windows login/logout has the callback checks and user confirmation recorded above. Live silent relogin
+after restart, unusable-session fallback, native Android/iOS/Mac paths, simultaneous multi-user PIE persistence,
+headless multiplayer PIE, browser console mapping, CEF profile persistence under the Illuvium engine, and
+stock-engine in-memory fallback still need their target environments. Packaged-game testing belongs to the
+user; no package/build identifier or oldest-reliable-Windows result was established. Original integration
+build and automation results below their historical headings must not be interpreted as rerun on this endpoint.
 
 ## Patch artifact
 
@@ -179,42 +253,129 @@ game login, and in-game behavior remain pending runtime validation. Plastic bran
 | --- | --- |
 | File | `illuvium-1.11.5-snapshot-customizations.patch` |
 | Base commit | `4973cee21bfaa53dadc9e4519d53a3ae2203bb29` |
-| Endpoint commit | `7eb5b5b32704267692b0d668d2ef2fddde217f57` |
-| Size | 75,623 bytes |
-| SHA-256 | `9ad3bc2aec22fc0799eef98de2490eefbfb3447463d7f4247f79219cd737e9a2` |
-| Source files | 31 |
-| Insertions | 839 |
-| Deletions | 159 |
+| Final source endpoint tree | `8762e9ca32fa2da840ea826fab9697ff821d76ea` |
+| Git HEAD before/after local synchronization | `1aa6864ad3295c701399d2bd66f678b8ad17c7bb` |
+| Size | 79,014 bytes |
+| SHA-256 | `41b1bde2cc6a917556c8476d63210165aadb319a2e6108adc5509a537f87682d` |
+| Changed files | 32 modified, 0 added/deleted/renamed |
+| Insertions | 865 |
+| Deletions | 160 |
 
-The patch excludes `CUSTOM_MODIFICATIONS.md` and the patch file itself.
+The full SDK customization patch excludes `CUSTOM_MODIFICATIONS.md` and the patch file itself.
+It includes the original integration customizations plus the subsequent callback change.
+
+### Changed-file inventory against upstream
+
+| Path | Insertions | Deletions |
+| --- | ---: | ---: |
+| `Immutable.uplugin` | 2 | 2 |
+| `Source/Immutable/Immutable.Build.cs` | 9 | 1 |
+| `Source/Immutable/Private/Immutable/Actions/ImtblBlueprintAsyncAction.cpp` | 7 | 2 |
+| `Source/Immutable/Private/Immutable/Actions/ImtblConnectionAsyncAction.cpp` | 3 | 2 |
+| `Source/Immutable/Private/Immutable/Actions/ImtblEmbeddedLoginAsyncAction.cpp` | 1 | 1 |
+| `Source/Immutable/Private/Immutable/Actions/ImtblPassportConnectEvmAsyncAction.cpp` | 3 | 2 |
+| `Source/Immutable/Private/Immutable/Actions/ImtblPassportGetEmailAsyncAction.cpp` | 3 | 2 |
+| `Source/Immutable/Private/Immutable/Actions/ImtblPassportGetLinkedAddressesAsyncAction.cpp` | 3 | 2 |
+| `Source/Immutable/Private/Immutable/Actions/ImtblPassportGetTokenAsyncAction.cpp` | 3 | 2 |
+| `Source/Immutable/Private/Immutable/Actions/ImtblPassportHasStoredCredentialsAsyncAction.cpp` | 3 | 2 |
+| `Source/Immutable/Private/Immutable/Actions/ImtblPassportInitializationAsyncAction.cpp` | 3 | 2 |
+| `Source/Immutable/Private/Immutable/Actions/ImtblPassportLogoutAsyncAction.cpp` | 3 | 2 |
+| `Source/Immutable/Private/Immutable/Actions/ImtblPassportZkEvmGetBalanceAsyncAction.cpp` | 3 | 2 |
+| `Source/Immutable/Private/Immutable/Actions/ImtblPassportZkEvmGetTransactionReceiptAA.cpp` | 3 | 2 |
+| `Source/Immutable/Private/Immutable/Actions/ImtblPassportZkEvmRequestAccountsAsyncAction.cpp` | 3 | 2 |
+| `Source/Immutable/Private/Immutable/Actions/ImtblPassportZkEvmSendTransactionAsyncAction.cpp` | 6 | 4 |
+| `Source/Immutable/Private/Immutable/Actions/ImtblPassportZkEvmSignTypedDataV4AsyncAction.cpp` | 3 | 2 |
+| `Source/Immutable/Private/Immutable/Browser/ImmutableBaseBrowserWidget.cpp` | 219 | 9 |
+| `Source/Immutable/Private/Immutable/Browser/ImmutableJSConnectorBrowserWidget.cpp` | 144 | 5 |
+| `Source/Immutable/Private/Immutable/ImmutablePassport.cpp` | 193 | 85 |
+| `Source/Immutable/Private/Immutable/ImmutableSubsystem.cpp` | 13 | 1 |
+| `Source/Immutable/Private/Immutable/ImtblBrowserUserWidget.cpp` | 2 | 8 |
+| `Source/Immutable/Private/Immutable/ImtblJSConnector.cpp` | 2 | 2 |
+| `Source/Immutable/Private/Immutable/Tests/ImtblMessagesTest.cpp` | 147 | 0 |
+| `Source/Immutable/Private/Immutable/Windows/ImmutablePKCEWindows.cpp` | 26 | 1 |
+| `Source/Immutable/Public/Immutable/Actions/ImtblBlueprintAsyncAction.h` | 2 | 1 |
+| `Source/Immutable/Public/Immutable/Browser/ImmutableBaseBrowserWidget.h` | 9 | 1 |
+| `Source/Immutable/Public/Immutable/Browser/ImmutableJSConnectorBrowserWidget.h` | 2 | 1 |
+| `Source/Immutable/Public/Immutable/ImmutableNames.h` | 2 | 1 |
+| `Source/Immutable/Public/Immutable/ImmutablePassport.h` | 32 | 2 |
+| `Source/Immutable/Public/Immutable/ImtblJSMessages.h` | 8 | 8 |
+| `Source/ImmutableEditor/ImmutableEditor.Build.cs` | 3 | 1 |
 
 ### Reproduce
 
+Run in PowerShell 7 from the SDK Git checkout. The final source tree can be reconstructed from the synchronized working
+files without changing the main index or creating a commit. The inspected checkout had no untracked SDK
+source; `add -u` deliberately includes its complete tracked source state. The temporary index preserves
+tracked modes; `core.autocrlf=input` uses the same clean-filter behavior as this checkout.
+
 ```powershell
-git diff --binary --full-index --find-renames `
+$PreviousIndex = $env:GIT_INDEX_FILE
+$SyncIndex = Join-Path $env:TEMP ([guid]::NewGuid().ToString() + '.index')
+try {
+  $env:GIT_INDEX_FILE = $SyncIndex
+  git read-tree HEAD
+  if ($LASTEXITCODE -ne 0) { throw 'read-tree failed' }
+  git -c core.autocrlf=input -c core.filemode=false add -u -- .
+  if ($LASTEXITCODE -ne 0) { throw 'index source failed' }
+  git update-index --force-remove -- CUSTOM_MODIFICATIONS.md illuvium-1.11.5-snapshot-customizations.patch
+  if ($LASTEXITCODE -ne 0) { throw 'exclude audits failed' }
+  $SourceTree = git write-tree
+  if ($LASTEXITCODE -ne 0) { throw 'write-tree failed' }
+  if ($SourceTree -ne '8762e9ca32fa2da840ea826fab9697ff821d76ea') { throw 'Source endpoint differs' }
+} finally {
+  $env:GIT_INDEX_FILE = $PreviousIndex
+  Remove-Item -LiteralPath $SyncIndex -ErrorAction SilentlyContinue
+}
+
+git -c diff.algorithm=myers diff --no-ext-diff --no-textconv --binary --full-index --find-renames `
+  --src-prefix=a/ --dst-prefix=b/ --no-color `
   --output=illuvium-1.11.5-snapshot-customizations.patch `
-  4973cee21bfaa53dadc9e4519d53a3ae2203bb29 `
-  7eb5b5b32704267692b0d668d2ef2fddde217f57 -- . `
+  4973cee21bfaa53dadc9e4519d53a3ae2203bb29 $SourceTree -- . `
   ':(exclude)CUSTOM_MODIFICATIONS.md' `
   ':(exclude)illuvium-1.11.5-snapshot-customizations.patch'
+if ($LASTEXITCODE -ne 0) { throw 'patch generation failed' }
+$Hash = (Get-FileHash .\illuvium-1.11.5-snapshot-customizations.patch -Algorithm SHA256).Hash.ToLowerInvariant()
+if ($Hash -ne '41b1bde2cc6a917556c8476d63210165aadb319a2e6108adc5509a537f87682d') { throw 'Patch hash differs' }
 ```
 
-### Apply from an absolute external path
+### Apply and compare at the exact base
 
-Resolve the patch before creating/checking out the base worktree so the patch remains available:
+The isolated checkout is created inside the SDK's Git metadata directory, outside the source payload.
+Resolve the patch first. Every command must succeed before continuing.
 
 ```powershell
 $PatchPath = (Resolve-Path '.\illuvium-1.11.5-snapshot-customizations.patch').Path
-$ApplyTree = Join-Path $env:TEMP 'immutable-sdk-1.11.5-patch-check'
-git worktree add --detach $ApplyTree 4973cee21bfaa53dadc9e4519d53a3ae2203bb29
-git -C $ApplyTree apply --binary --check $PatchPath
-git -C $ApplyTree apply --binary $PatchPath
+$ApplyTree = Join-Path (Resolve-Path '.git').Path ('patch-check-' + [guid]::NewGuid())
+git -c core.autocrlf=false worktree add --detach $ApplyTree 4973cee21bfaa53dadc9e4519d53a3ae2203bb29
+if ($LASTEXITCODE -ne 0) { throw 'base checkout failed' }
+git -C $ApplyTree -c core.autocrlf=false apply --binary --check $PatchPath
+if ($LASTEXITCODE -ne 0) { throw 'apply check failed' }
+git -C $ApplyTree -c core.autocrlf=false apply --binary $PatchPath
+if ($LASTEXITCODE -ne 0) { throw 'apply failed' }
+git -C $ApplyTree -c core.autocrlf=false add -A
+if ($LASTEXITCODE -ne 0) { throw 'index applied result failed' }
+$AppliedTree = git -C $ApplyTree write-tree
+if ($LASTEXITCODE -ne 0) { throw 'applied write-tree failed' }
+if ($AppliedTree -ne '8762e9ca32fa2da840ea826fab9697ff821d76ea') { throw 'Applied source differs' }
+# Remove only this newly created disposable checkout after successful comparison.
+git worktree remove --force $ApplyTree
 ```
 
 ### Reproduction verification
 
-The patch was checked and applied in an external disposable worktree at the exact base. After staging
-the result, `git write-tree` returned `e0389a693f2b8a186b0d24dedd24737916aa30fd`, exactly matching
-the source endpoint after excluding `CUSTOM_MODIFICATIONS.md` and the patch artifact. This compares
-every included tracked path, file mode, and blob hash (122 tracked files) and confirms no missing or
-extra source files. The two audit artifacts are excluded from the patch payload by pathspec.
+On 2026-09-08, `apply --check`, application, and exact Git tree comparison passed in an isolated checkout
+at the pinned base. The applied tree was `8762e9ca32fa2da840ea826fab9697ff821d76ea`, matching the final
+source endpoint across all 122 tracked paths, modes, and blob hashes. The earlier original-integration
+verification produced `e0389a693f2b8a186b0d24dedd24737916aa30fd`; that remains a historical result.
+
+There are no mode changes relative to upstream. The upstream `.github/scripts/check_team_membership.sh`
+retains mode `100755`; the other 121 files are `100644`. Windows filesystem parity cannot independently
+represent POSIX executable bits, so modes are verified through Git trees. The ten unchanged `.github/`
+files participate in patch reproduction but are excluded from the 114-file distributable parity check.
+
+The callback file retains its existing LF bytes; the audit Markdown uses LF. No blanket source conversion
+was performed. Verification uses `core.autocrlf=false` to preserve exact blobs on checkout/application.
+The patch preserves ten CRLF lines from existing diff content; do not normalize the patch as ordinary text,
+as that changes its hash and can change its payload. Tree equality covers exact committed blob line endings;
+separate filesystem SHA-256 comparison verifies byte-for-byte parity of the two distributable plugin trees.
+The audit artifacts are excluded from both endpoint and patch payload, then compared separately after copying.

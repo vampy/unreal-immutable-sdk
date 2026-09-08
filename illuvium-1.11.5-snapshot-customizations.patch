@@ -1619,6 +1619,44 @@ index 3918188d6b1075bc2fb562eb59c3f85387c8c701..7642c9dce71576ce5a6d04a83bbe061f
 +#endif
 +
  #endif // WITH_DEV_AUTOMATION_TESTS
+diff --git a/Source/Immutable/Private/Immutable/Windows/ImmutablePKCEWindows.cpp b/Source/Immutable/Private/Immutable/Windows/ImmutablePKCEWindows.cpp
+index 03275060de144dc712aa9eefa227f69e8166f1b3..45353ebb2c89f7ea9c2d1838d4cec14a78cb0ab9 100644
+--- a/Source/Immutable/Private/Immutable/Windows/ImmutablePKCEWindows.cpp
++++ b/Source/Immutable/Private/Immutable/Windows/ImmutablePKCEWindows.cpp
+@@ -354,7 +354,32 @@ bool UImmutablePKCEWindows::RegisterProtocolHandler(const FString& Protocol)
+ 		return false;
+ 	}
+ 
+-	FString CommandLine = FString::Printf(TEXT("powershell.exe -ExecutionPolicy Bypass -NoProfile -File \"%s\" %%1"), *PowerShellFilePath);
++	// Windows invokes this registered command when the browser follows our login or logout URI. The running game does not
++	// create that process, so hiding a process with FPlatformProcess::CreateProc inside the game cannot control this launch.
++	// Keep the SDK's existing transport: PKCE.ps1 writes the URI into HKCU\Software\<Protocol>\DeepLink, and the registry
++	// watcher delivers it to Passport on the game thread. Both Connect and Logout initialize this shared protocol handler.
++	//
++	// Launch through the built-in console host in headless mode so its console is never presented as a visible window.
++	// Direct powershell.exe -WindowStyle Hidden still flashes: Windows can show the console before PowerShell handles that
++	// argument. Replacing PowerShell with cmd.exe has the same console-startup problem. Headless conhost retains our existing
++	// script without shipping another executable or introducing a VBScript wrapper. Do not restore the direct launcher as a
++	// cosmetic simplification; the visible-window regression was reproduced with the compiled SDK before this change.
++	//
++	// Quote both the script path (installation/user directories may contain spaces) and the complete callback URI. FString's
++	// printf turns %%1 into the literal %1 placeholder; Windows substitutes the activated URI when invoking the handler.
++	// Continue passing the URI as script data after -File, rather than embedding it in a PowerShell -Command expression.
++	// -NoProfile and -ExecutionPolicy Bypass retain upstream behavior; neither is responsible for suppressing the console.
++	//
++	// conhost does not reliably forward its child's exit code. Authentication completion must continue to come from the
++	// received callback and Passport's result, not from the launcher's exit status. A successful registration only means the
++	// script and registry entries were written; it does not prove this Windows build can execute the headless command.
++	//
++	// Compatibility: conhost exists since Windows 7, but that alone does not imply --headless support. Windows 10 1809 is the
++	// documented ConPTY API baseline, not a guaranteed minimum for this direct command line. Microsoft treats direct conhost
++	// invocation as an unsupported interface, and older versions had argument-quoting bugs. There is no version check/fallback
++	// here: validate the oldest Windows build we ship on, including paths with spaces, before claiming support for that build.
++	FString CommandLine = FString::Printf(
++		TEXT("conhost.exe --headless powershell.exe -ExecutionPolicy Bypass -NoProfile -File \"%s\" \"%%1\""), *PowerShellFilePath);
+ 	FString KeyPath = GetProtocolRegistryKeyPath(Protocol);
+ 
+ 	// Create main protocol handler registry key
 diff --git a/Source/Immutable/Public/Immutable/Actions/ImtblBlueprintAsyncAction.h b/Source/Immutable/Public/Immutable/Actions/ImtblBlueprintAsyncAction.h
 index 7f8d91901eecb954b9c541e2f0e55a20eed82dd1..0ce3f42bdae279e4de466d56b2d606965aa342c4 100644
 --- a/Source/Immutable/Public/Immutable/Actions/ImtblBlueprintAsyncAction.h
