@@ -45,15 +45,17 @@ bool FImtblMessagesTest::RunTest(const FString& Parameters)
 	// string
 	{
 		const FString RedirectUri = "https://example.com";
-		const FImmutablePassportInitData InitData { ClientId, RedirectUri, ImmutablePassportEnvironmentConstants::EnvironmentSandbox };
-		FString ExpectedJson = "{\"clientId\":\"MyExampleClientId\",\"redirectUri\":\"https://" "example.com\",\"environment\":\"sandbox\"";
+		const FImmutablePassportInitData InitData { ClientId, RedirectUri, "", ImmutablePassportEnvironmentConstants::EnvironmentSandbox };
+		FString ExpectedJson = "{\"clientId\":\"MyExampleClientId\",\"redirectUri\":\"https://" "example.com\",\"logoutRedirectUri\":\"\",\"environment\":\"sandbox\",\"isSilentLogout\":false";
 		ExpectedJson += ",\"engineVersion\":{";
 		ExpectedJson += "\"engine\":\"unreal\"";
+		ExpectedJson += FString(",\"engineSdkVersion\":\"") + ENGINE_SDK_VERSION + "\"";
 		// example:
 		// engineVersion":"5.2.1-26001984+++UE5+Release-5.2","platform":"Mac","platformVersion":"13.5.2"
 		ExpectedJson += ",\"engineVersion\":\"" + FEngineVersion::Current().ToString().Replace(TEXT(" "), TEXT("_")) + "\"";
 		ExpectedJson += FString(",\"platform\":\"") + FString(FPlatformProperties::IniPlatformName()).Replace(TEXT(" "), TEXT("_")) + "\"";
 		ExpectedJson += FString(",\"platformVersion\":\"") + FPlatformMisc::GetOSVersion().Replace(TEXT(" "), TEXT("_")) + "\"";
+		ExpectedJson += FString(",\"deviceModel\":\"") + FGenericPlatformMisc::GetDeviceMakeAndModel() + "\"";
 		ExpectedJson += "}}";
 		const FString Result = InitData.ToJsonString();
 		TestEqual("toJsonString() on FPassportInitData with clientId and " "redirectUri should produce valid JSON output", Result, ExpectedJson);
@@ -62,15 +64,17 @@ bool FImtblMessagesTest::RunTest(const FString& Parameters)
 	// an FImmutablePassportInitData with an empty redirectUri should leave the
 	// redirectUri field out of the json string when converted
 	{
-		const FImmutablePassportInitData InitData { ClientId, "", ImmutablePassportEnvironmentConstants::EnvironmentSandbox };
-		FString ExpectedJson = "{\"clientId\":\"MyExampleClientId\",\"environment\":\"sandbox\"";
+		const FImmutablePassportInitData InitData { ClientId, "", "", ImmutablePassportEnvironmentConstants::EnvironmentSandbox };
+		FString ExpectedJson = "{\"clientId\":\"MyExampleClientId\",\"logoutRedirectUri\":\"\",\"environment\":\"sandbox\",\"isSilentLogout\":false";
 		ExpectedJson += ",\"engineVersion\":{";
 		ExpectedJson += "\"engine\":\"unreal\"";
+		ExpectedJson += FString(",\"engineSdkVersion\":\"") + ENGINE_SDK_VERSION + "\"";
 		// example:
 		// engineVersion":"5.2.1-26001984+++UE5+Release-5.2","platform":"Mac","platformVersion":"13.5.2"
 		ExpectedJson += ",\"engineVersion\":\"" + FEngineVersion::Current().ToString().Replace(TEXT(" "), TEXT("_")) + "\"";
 		ExpectedJson += FString(",\"platform\":\"") + FString(FPlatformProperties::IniPlatformName()).Replace(TEXT(" "), TEXT("_")) + "\"";
 		ExpectedJson += FString(",\"platformVersion\":\"") + FPlatformMisc::GetOSVersion().Replace(TEXT(" "), TEXT("_")) + "\"";
+		ExpectedJson += FString(",\"deviceModel\":\"") + FGenericPlatformMisc::GetDeviceMakeAndModel() + "\"";
 		ExpectedJson += "}}";
 		const FString Result = InitData.ToJsonString();
 		TestEqual("toJsonString() on FPassportInitData with an empty redirectUri " "should produce a valid JSON string with no redirectUri field", Result, ExpectedJson);
